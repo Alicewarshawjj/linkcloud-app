@@ -109,6 +109,7 @@ function requireAuth(req, res, next) {
 }
 
 // ═══ STATIC FILES ═══
+app.use(express.static(path.join(__dirname, 'public')));
 app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use('/favicon.ico', express.static(path.join(__dirname, 'public', 'favicon.ico')));
 
