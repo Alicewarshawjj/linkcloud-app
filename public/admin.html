@@ -40,7 +40,7 @@
         .upload-zone:hover,.upload-zone.dragover{border-color:#667eea;background:rgba(102,126,234,.06)}
         .upload-zone.has-image{border-style:solid;border-color:rgba(255,255,255,.08)}
         .upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}
-        .upload-zone img{width:100%;height:100%;object-fit:cover;display:block;object-position:50% 50%;cursor:move;user-select:none}
+        .upload-zone img{width:100%;height:100%;object-fit:cover;display:block;object-position:50% 50%;cursor:move;user-select:none;transform-origin:50% 50%}
         .upload-zone .placeholder{text-align:center;padding:16px;color:#555;font-size:12px;line-height:1.5}
         .upload-zone .placeholder span{font-size:24px;display:block;margin-bottom:4px}
         .cover-upload{height:100px;border-radius:12px}
@@ -155,6 +155,11 @@
             </div>
             <div class="position-controls" id="coverPosition">
                 <div class="position-row">
+                    <span class="position-label">Zoom</span>
+                    <input type="range" class="position-slider" id="coverZoom" min="100" max="200" value="150" oninput="updateImagePosition('cover')">
+                    <span class="position-value" id="coverZoomVal">150%</span>
+                </div>
+                <div class="position-row">
                     <span class="position-label">Horizontal</span>
                     <input type="range" class="position-slider" id="coverX" min="0" max="100" value="50" oninput="updateImagePosition('cover')">
                     <span class="position-value" id="coverXVal">50%</span>
@@ -173,6 +178,11 @@
                 <div class="upload-progress" id="avatarProgress" style="width:0"></div>
             </div>
             <div class="position-controls" id="avatarPosition">
+                <div class="position-row">
+                    <span class="position-label">Zoom</span>
+                    <input type="range" class="position-slider" id="avatarZoom" min="100" max="200" value="150" oninput="updateImagePosition('avatar')">
+                    <span class="position-value" id="avatarZoomVal">150%</span>
+                </div>
                 <div class="position-row">
                     <span class="position-label">Horizontal</span>
                     <input type="range" class="position-slider" id="avatarX" min="0" max="100" value="50" oninput="updateImagePosition('avatar')">
@@ -473,10 +483,18 @@ async function uploadImage(input, type) {
 
 // Update image position with sliders
 function updateImagePosition(type) {
+    const zoom = document.getElementById(type + 'Zoom').value;
     const x = document.getElementById(type + 'X').value;
     const y = document.getElementById(type + 'Y').value;
     const img = document.getElementById(type + 'Img');
+
+    // Apply zoom
+    img.style.transform = `scale(${zoom / 100})`;
+    // Apply position
     img.style.objectPosition = x + '% ' + y + '%';
+
+    // Update value displays
+    document.getElementById(type + 'ZoomVal').textContent = zoom + '%';
     document.getElementById(type + 'XVal').textContent = x + '%';
     document.getElementById(type + 'YVal').textContent = y + '%';
     markDirty();
