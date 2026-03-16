@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Analytics - LinkCloud</title>
+  <title>Analytics - cmehere.net</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -282,9 +282,28 @@
   <script>
     let currentDays = 30;
 
+    // Check if logged in first
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/auth/check', { credentials: 'include' });
+        if (!res.ok) {
+          window.location.href = '/admin';
+          return false;
+        }
+        return true;
+      } catch (e) {
+        window.location.href = '/admin';
+        return false;
+      }
+    }
+
     async function loadAnalytics() {
       try {
-        const res = await fetch(`/api/analytics/stats?days=${currentDays}`);
+        const res = await fetch(`/api/analytics/stats?days=${currentDays}`, { credentials: 'include' });
+        if (res.status === 401) {
+          window.location.href = '/admin';
+          return;
+        }
         if (!res.ok) throw new Error('Failed to load analytics');
         const data = await res.json();
         renderAnalytics(data);
@@ -418,8 +437,10 @@
       });
     });
 
-    // Initial load
-    loadAnalytics();
+    // Initial load - check auth first
+    checkAuth().then(ok => {
+      if (ok) loadAnalytics();
+    });
   </script>
 </body>
 </html>
