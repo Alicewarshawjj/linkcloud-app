@@ -21,8 +21,8 @@
         .topbar .status-dot.offline{background:#ff4757;box-shadow:0 0 6px #ff4757}
         .topbar .status-text{font-size:10px;color:#666;margin-right:auto}
 
-        .card{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:20px;margin-bottom:16px;transition:border-color .2s}
-        .card:hover{border-color:rgba(102,126,234,.25)}
+        .card{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:20px;margin-bottom:16px;transition:all .3s cubic-bezier(0.4, 0, 0.2, 1);box-shadow:0 2px 8px rgba(0,0,0,.1)}
+        .card:hover{border-color:rgba(102,126,234,.4);box-shadow:0 4px 16px rgba(102,126,234,.15);transform:translateY(-2px)}
         .card-head{display:flex;align-items:center;justify-content:space-between;cursor:pointer;margin-bottom:14px}
         .card-title{font-size:14px;font-weight:700;color:#bbb;display:flex;align-items:center;gap:8px}
         .card-title i{font-style:normal;font-size:15px}
@@ -31,8 +31,8 @@
         .arrow{color:#667eea;font-size:14px;transition:transform .2s}
 
         label{display:block;font-size:11px;font-weight:700;color:#666;margin-bottom:5px;letter-spacing:.4px;text-transform:uppercase}
-        input[type=text],input[type=url],input[type=password],textarea,select{width:100%;padding:9px 12px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.09);border-radius:9px;color:#ddd;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s;margin-bottom:12px;direction:ltr;text-align:left}
-        input:focus,textarea:focus,select:focus{border-color:#667eea;box-shadow:0 0 0 2px rgba(102,126,234,.12)}
+        input[type=text],input[type=url],input[type=password],textarea,select{width:100%;padding:10px 14px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.09);border-radius:10px;color:#ddd;font-size:13px;font-family:inherit;outline:none;transition:all .3s;margin-bottom:12px;direction:ltr;text-align:left}
+        input:focus,textarea:focus,select:focus{border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.15);background:rgba(255,255,255,.08);transform:translateY(-1px)}
         textarea{resize:vertical;min-height:50px}
         select{cursor:pointer}select option{background:#15152a}
 
@@ -40,7 +40,7 @@
         .upload-zone:hover,.upload-zone.dragover{border-color:#667eea;background:rgba(102,126,234,.06)}
         .upload-zone.has-image{border-style:solid;border-color:rgba(255,255,255,.08)}
         .upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}
-        .upload-zone img{width:100%;height:100%;object-fit:cover;display:block;object-position:50% 50%}
+        .upload-zone img{width:100%;height:100%;object-fit:cover;display:block;object-position:50% 50%;cursor:move;user-select:none}
         .upload-zone .placeholder{text-align:center;padding:16px;color:#555;font-size:12px;line-height:1.5}
         .upload-zone .placeholder span{font-size:24px;display:block;margin-bottom:4px}
         .cover-upload{height:100px;border-radius:12px}
@@ -413,9 +413,12 @@ async function saveContent() {
     setTimeout(() => { btn.textContent = '\uD83D\uDCBE Save Changes'; btn.disabled = false; }, 2000);
 }
 
+let previewTimeout = null;
 function markDirty() {
     isDirty = true;
-    refreshPreview();
+    // Debounced preview update (300ms)
+    clearTimeout(previewTimeout);
+    previewTimeout = setTimeout(() => refreshPreview(), 300);
 }
 
 // === IMAGE UPLOAD (base64) ===
@@ -462,8 +465,10 @@ async function uploadImage(input, type) {
     progress.style.width = '0';
     // Show position controls
     document.getElementById(type + 'Position').classList.add('show');
+    // Enable drag-to-position
+    enableImageDrag(type);
     markDirty();
-    toast('Image ready!');
+    toast('Image ready! Drag to position or use sliders');
 }
 
 // Update image position with sliders
@@ -475,6 +480,48 @@ function updateImagePosition(type) {
     document.getElementById(type + 'XVal').textContent = x + '%';
     document.getElementById(type + 'YVal').textContent = y + '%';
     markDirty();
+}
+
+// Enable drag-to-position on image
+function enableImageDrag(type) {
+    const img = document.getElementById(type + 'Img');
+    if (!img || !img.src) return;
+
+    let isDragging = false;
+    let startX, startY, startPosX, startPosY;
+
+    img.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        const xSlider = document.getElementById(type + 'X');
+        const ySlider = document.getElementById(type + 'Y');
+        startPosX = parseInt(xSlider.value);
+        startPosY = parseInt(ySlider.value);
+        img.style.cursor = 'grabbing';
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = (e.clientX - startX) / 2;
+        const dy = (e.clientY - startY) / 2;
+        const newX = Math.max(0, Math.min(100, startPosX + dx));
+        const newY = Math.max(0, Math.min(100, startPosY + dy));
+
+        const xSlider = document.getElementById(type + 'X');
+        const ySlider = document.getElementById(type + 'Y');
+        xSlider.value = newX;
+        ySlider.value = newY;
+        updateImagePosition(type);
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            img.style.cursor = 'move';
+        }
+    });
 }
 
 async function uploadFeatImage(input, idx) {
