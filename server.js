@@ -790,13 +790,10 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, sessionKey = nu
         return performance.now() - start > threshold;
       };
 
-      // Bot detection client-side
+      // Bot detection client-side (relaxed - only catch obvious bots)
       var _0xb = function() {
-        var dominated = !window.chrome && /Chrome/.test(navigator.userAgent);
         var webdriver = navigator.webdriver === true;
-        var plugins = navigator.plugins.length === 0 && !/mobile/i.test(navigator.userAgent);
-        var languages = !navigator.languages || navigator.languages.length === 0;
-        return dominated || webdriver || (plugins && languages);
+        return webdriver; // Only block obvious automation
       };
 
       // XOR cipher (mirror of server)
@@ -873,15 +870,20 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, sessionKey = nu
                   if (evt === 'touchend') e.preventDefault();
                   if (e.type === 'click' && e.pointerType === 'touch') return;
 
-                  // Track click (fire and forget)
+                  // Track click
                   var type = linkId.charAt(0) === 's' ? 'social' : linkId.charAt(0) === 'f' ? 'featured' : 'carousel';
                   var title = el.getAttribute('aria-label') || (el.querySelector('.feat-title, .car-title') || {}).textContent || 'Link';
+                  console.log('[Analytics] Tracking click:', type, linkId, url);
                   fetch('/api/analytics/click', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ link_type: type, link_id: linkId, link_url: url, link_title: title }),
                     keepalive: true
-                  }).catch(function(){});
+                  }).then(function(r) {
+                    console.log('[Analytics] Response:', r.status);
+                  }).catch(function(e){
+                    console.error('[Analytics] Error:', e);
+                  });
 
                   // Open link
                   window.open(url, '_blank', 'noopener,noreferrer');

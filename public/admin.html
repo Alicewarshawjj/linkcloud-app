@@ -23,6 +23,17 @@
         .analytics-btn{background:rgba(102,126,234,.15);border:1px solid rgba(102,126,234,.3);color:#667eea;padding:8px 14px;border-radius:8px;text-decoration:none;font-size:16px;transition:all .2s;display:flex;align-items:center;gap:6px}
         .analytics-btn:hover{background:rgba(102,126,234,.25);transform:translateY(-1px)}
 
+        /* Navigation Tabs */
+        .nav-tabs{display:flex;gap:4px;margin-bottom:20px;background:rgba(255,255,255,.03);padding:4px;border-radius:12px;border:1px solid rgba(255,255,255,.06)}
+        .nav-tab{flex:1;padding:12px 16px;background:transparent;border:none;color:#888;font-size:13px;font-weight:600;cursor:pointer;border-radius:8px;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
+        .nav-tab:hover{color:#bbb;background:rgba(255,255,255,.03)}
+        .nav-tab.active{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff}
+        .nav-tab svg{width:16px;height:16px;fill:currentColor}
+        .tab-content{display:none}
+        .tab-content.active{display:block}
+        @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+        .spinner{border:3px solid rgba(255,255,255,.1);border-top:3px solid #667eea;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite}
+
         .card{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:20px;margin-bottom:16px;transition:all .3s cubic-bezier(0.4, 0, 0.2, 1);box-shadow:0 2px 8px rgba(0,0,0,.1)}
         .card:hover{border-color:rgba(102,126,234,.4);box-shadow:0 4px 16px rgba(102,126,234,.15);transform:translateY(-2px)}
         .card-head{display:flex;align-items:center;justify-content:space-between;cursor:pointer;margin-bottom:14px}
@@ -138,8 +149,22 @@
         <span class="tag">ADMIN</span>
         <div class="status-dot online" id="statusDot"></div>
         <span class="status-text" id="statusText">Connected</span>
-        <a href="/analytics.html" class="analytics-btn" title="View Analytics">📊</a>
     </div>
+
+    <!-- Navigation Tabs -->
+    <div class="nav-tabs">
+        <button class="nav-tab active" onclick="switchTab('edit')">
+            <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+            Edit Page
+        </button>
+        <button class="nav-tab" onclick="switchTab('analytics')">
+            <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+            Analytics
+        </button>
+    </div>
+
+    <!-- TAB: Edit Page -->
+    <div id="tabEdit" class="tab-content active">
 
     <!-- PROFILE -->
     <div class="card" id="secProfile">
@@ -231,8 +256,37 @@
 
     <button class="btn-save" id="saveBtn" onclick="saveContent()">&#128190; Save Changes</button>
     <button class="btn-sec" onclick="refreshPreview()">&#8635; Refresh Preview</button>
-    <button class="btn-sec" onclick="doLogout()" style="margin-top:16px;color:#ff4757;border-color:rgba(255,71,87,.2)">&#128682; Logout</button>
     <p style="text-align:center;color:#333;font-size:10px;margin-top:12px">Changes save to database &rarr; landing page updates instantly</p>
+    </div><!-- End tabEdit -->
+
+    <!-- TAB: Analytics -->
+    <div id="tabAnalytics" class="tab-content">
+        <div class="card">
+            <div class="card-head"><div class="card-title"><i>📊</i> Analytics Overview</div></div>
+            <div class="card-body" id="analyticsContent">
+                <div style="text-align:center;padding:40px 20px;color:#666">
+                    <div class="spinner" style="border:3px solid rgba(255,255,255,.1);border-top:3px solid #667eea;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:0 auto 16px"></div>
+                    <div>Loading analytics...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-head"><div class="card-title"><i>📈</i> Top Links</div></div>
+            <div class="card-body" id="topLinksContent">
+                <div style="text-align:center;padding:20px;color:#666;font-size:13px">Loading...</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-head"><div class="card-title"><i>📅</i> Recent Activity</div></div>
+            <div class="card-body" id="recentActivityContent">
+                <div style="text-align:center;padding:20px;color:#666;font-size:13px">Loading...</div>
+            </div>
+        </div>
+    </div><!-- End tabAnalytics -->
+
+    <button class="btn-sec" onclick="doLogout()" style="margin-top:16px;color:#ff4757;border-color:rgba(255,71,87,.2)">&#128682; Logout</button>
 </div>
 
 <div class="preview-side">
@@ -740,6 +794,111 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 });
+
+// === TAB SWITCHING ===
+function switchTab(tab) {
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+    document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
+    document.getElementById(tab === 'edit' ? 'tabEdit' : 'tabAnalytics').classList.add('active');
+
+    if (tab === 'analytics') {
+        loadAnalyticsData();
+    }
+}
+
+// === ANALYTICS ===
+let analyticsData = null;
+let analyticsDays = 30;
+
+async function loadAnalyticsData() {
+    try {
+        const res = await fetch(`/api/analytics/stats?days=${analyticsDays}`, { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load');
+        analyticsData = await res.json();
+        renderAnalyticsOverview();
+        renderTopLinks();
+        renderRecentActivity();
+    } catch (e) {
+        document.getElementById('analyticsContent').innerHTML = `<div style="text-align:center;padding:40px;color:#ff4757">Error loading analytics: ${e.message}</div>`;
+    }
+}
+
+function renderAnalyticsOverview() {
+    const { total, byType } = analyticsData;
+    const socialClicks = byType.find(t => t.link_type === 'social')?.clicks || 0;
+    const featuredClicks = byType.find(t => t.link_type === 'featured')?.clicks || 0;
+    const carouselClicks = byType.find(t => t.link_type === 'carousel')?.clicks || 0;
+
+    document.getElementById('analyticsContent').innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
+            <div style="background:rgba(102,126,234,.1);border-radius:12px;padding:20px;text-align:center">
+                <div style="font-size:28px;font-weight:800;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent">${total}</div>
+                <div style="font-size:11px;color:#888;margin-top:4px;text-transform:uppercase;letter-spacing:.5px">Total Clicks</div>
+            </div>
+            <div style="background:rgba(102,126,234,.1);border-radius:12px;padding:20px;text-align:center">
+                <div style="font-size:28px;font-weight:800;color:#667eea">${socialClicks}</div>
+                <div style="font-size:11px;color:#888;margin-top:4px;text-transform:uppercase;letter-spacing:.5px">Social</div>
+            </div>
+            <div style="background:rgba(102,126,234,.1);border-radius:12px;padding:20px;text-align:center">
+                <div style="font-size:28px;font-weight:800;color:#764ba2">${featuredClicks}</div>
+                <div style="font-size:11px;color:#888;margin-top:4px;text-transform:uppercase;letter-spacing:.5px">Featured</div>
+            </div>
+            <div style="background:rgba(102,126,234,.1);border-radius:12px;padding:20px;text-align:center">
+                <div style="font-size:28px;font-weight:800;color:#ff9800">${carouselClicks}</div>
+                <div style="font-size:11px;color:#888;margin-top:4px;text-transform:uppercase;letter-spacing:.5px">Carousel</div>
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px">
+            <button onclick="analyticsDays=7;loadAnalyticsData()" class="btn-sec" style="flex:1;padding:8px;font-size:11px;margin:0;${analyticsDays===7?'background:#667eea;color:#fff;border-color:#667eea':''}">7 Days</button>
+            <button onclick="analyticsDays=30;loadAnalyticsData()" class="btn-sec" style="flex:1;padding:8px;font-size:11px;margin:0;${analyticsDays===30?'background:#667eea;color:#fff;border-color:#667eea':''}">30 Days</button>
+            <button onclick="analyticsDays=90;loadAnalyticsData()" class="btn-sec" style="flex:1;padding:8px;font-size:11px;margin:0;${analyticsDays===90?'background:#667eea;color:#fff;border-color:#667eea':''}">90 Days</button>
+        </div>
+    `;
+}
+
+function renderTopLinks() {
+    const { topLinks } = analyticsData;
+    if (!topLinks || topLinks.length === 0) {
+        document.getElementById('topLinksContent').innerHTML = `<div style="text-align:center;padding:20px;color:#666;font-size:13px">No clicks recorded yet</div>`;
+        return;
+    }
+
+    document.getElementById('topLinksContent').innerHTML = topLinks.map(link => `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px;background:rgba(255,255,255,.03);border-radius:8px;margin-bottom:8px">
+            <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:600;color:#ddd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${link.link_title || 'Untitled'}</div>
+                <div style="font-size:10px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${link.link_url || ''}</div>
+            </div>
+            <div style="background:${link.link_type==='social'?'rgba(102,126,234,.2)':link.link_type==='featured'?'rgba(118,75,162,.2)':'rgba(255,152,0,.2)'};color:${link.link_type==='social'?'#667eea':link.link_type==='featured'?'#764ba2':'#ff9800'};padding:4px 8px;border-radius:6px;font-size:10px;font-weight:600;text-transform:uppercase">${link.link_type}</div>
+            <div style="font-weight:700;color:#667eea;min-width:40px;text-align:right">${link.clicks}</div>
+        </div>
+    `).join('');
+}
+
+function renderRecentActivity() {
+    const { daily } = analyticsData;
+    if (!daily || daily.length === 0) {
+        document.getElementById('recentActivityContent').innerHTML = `<div style="text-align:center;padding:20px;color:#666;font-size:13px">No activity yet</div>`;
+        return;
+    }
+
+    const maxClicks = Math.max(...daily.map(d => parseInt(d.clicks)));
+    document.getElementById('recentActivityContent').innerHTML = `
+        <div style="display:flex;align-items:flex-end;gap:4px;height:100px;padding-bottom:20px">
+            ${daily.slice().reverse().slice(0, 14).map(d => {
+                const height = Math.max(10, (parseInt(d.clicks) / maxClicks) * 100);
+                const date = new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                return `<div style="flex:1;display:flex;flex-direction:column;align-items:center">
+                    <div style="font-size:9px;color:#667eea;margin-bottom:4px">${d.clicks}</div>
+                    <div style="width:100%;height:${height}px;background:linear-gradient(to top,#667eea,#764ba2);border-radius:4px 4px 0 0"></div>
+                    <div style="font-size:8px;color:#666;margin-top:4px;transform:rotate(-45deg);white-space:nowrap">${date}</div>
+                </div>`;
+            }).join('')}
+        </div>
+    `;
+}
 
 // === INIT ===
 checkAuth();
