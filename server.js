@@ -66,18 +66,32 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_analytics_slug ON analytics(slug);
       CREATE INDEX IF NOT EXISTS idx_analytics_clicked_at ON analytics(clicked_at DESC);
       CREATE INDEX IF NOT EXISTS idx_analytics_link_type ON analytics(link_type);
-      CREATE INDEX IF NOT EXISTS idx_analytics_country ON analytics(country_code);
-
-      -- Add new columns if they don't exist (migration for existing databases)
-      DO $$ BEGIN
-        ALTER TABLE analytics ADD COLUMN IF NOT EXISTS country_code VARCHAR(5);
-        ALTER TABLE analytics ADD COLUMN IF NOT EXISTS city VARCHAR(100);
-        ALTER TABLE analytics ADD COLUMN IF NOT EXISTS os VARCHAR(50);
-        ALTER TABLE analytics ADD COLUMN IF NOT EXISTS browser VARCHAR(50);
-        ALTER TABLE analytics ADD COLUMN IF NOT EXISTS device VARCHAR(20);
-      EXCEPTION WHEN OTHERS THEN NULL;
-      END $$;
     `);
+
+    // Run migrations for existing databases - add missing columns
+    const migrations = [
+      'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS country_code VARCHAR(5)',
+      'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS city VARCHAR(100)',
+      'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS os VARCHAR(50)',
+      'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS browser VARCHAR(50)',
+      'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS device VARCHAR(20)'
+    ];
+
+    for (const migration of migrations) {
+      try {
+        await client.query(migration);
+      } catch (e) {
+        // Column might already exist, that's fine
+        console.log(`Migration note: ${e.message}`);
+      }
+    }
+
+    // Create index after columns exist
+    try {
+      await client.query('CREATE INDEX IF NOT EXISTS idx_analytics_country ON analytics(country_code)');
+    } catch (e) {
+      console.log(`Index note: ${e.message}`);
+    }
 
     // Create default admin user if not exists
     const adminUser = process.env.ADMIN_USERNAME || 'admin';
