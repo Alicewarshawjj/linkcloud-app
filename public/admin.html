@@ -436,7 +436,7 @@ async function doLogin() {
 }
 
 async function doLogout() {
-    await fetch('/api/auth/logout', {method:'POST'});
+    await fetch('/api/auth/logout', {method:'POST', credentials: 'same-origin'});
     authToken = null;
     document.getElementById('loginScreen').style.display = 'flex';
     document.getElementById('mainApp').style.display = 'none';
@@ -444,7 +444,7 @@ async function doLogout() {
 
 async function checkAuth() {
     try {
-        const res = await fetch('/api/auth/check');
+        const res = await fetch('/api/auth/check', { credentials: 'same-origin' });
         if (res.ok) {
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('mainApp').style.display = 'block';
@@ -910,7 +910,7 @@ function setDays(d) {
 
 async function loadAnalyticsData() {
     try {
-        const res = await fetch(`/api/analytics/stats?days=${analyticsDays}`, { credentials: 'include' });
+        const res = await fetch(`/api/analytics/stats?days=${analyticsDays}`, { credentials: 'same-origin' });
         if (!res.ok) throw new Error('Failed to load');
         analyticsData = await res.json();
         renderStats();

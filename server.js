@@ -382,24 +382,11 @@ app.use((req, res, next) => {
 
 app.use(compression());
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"], // Required for inline click handlers
-      styleSrc: ["'self'", "'unsafe-inline'"],  // Required for inline styles
-      imgSrc: ["'self'", "data:", "https:"],    // Allow https images and data URIs
-      fontSrc: ["'self'"],
-      connectSrc: ["'self'", "http://ip-api.com"], // For geolocation API
-      frameSrc: ["'none'"],                     // Block iframes
-      objectSrc: ["'none'"],                    // Block plugins
-      baseUri: ["'self'"],
-      formAction: ["'self'"],
-      frameAncestors: ["'none'"],               // Prevent clickjacking
-      upgradeInsecureRequests: []
-    }
-  },
+  // Disable CSP for now - we use inline styles/scripts throughout
+  // TODO: Move to external CSS/JS files and re-enable strict CSP
+  contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
-  // Additional security headers
+  // Keep other security headers
   hsts: {
     maxAge: 31536000,
     includeSubDomains: true,
@@ -572,7 +559,7 @@ app.post('/api/auth/login', loginLimiter, checkLoginLockout, async (req, res) =>
     res.cookie('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict', // Changed to strict for better security
+      sameSite: 'lax', // lax for same-site navigation, strict breaks some flows
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
     res.json({ ok: true });
