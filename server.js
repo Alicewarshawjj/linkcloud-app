@@ -281,10 +281,22 @@ function renderProfilePage(data, seo = {}) {
   ${p.avatarUrl ? `<meta property="og:image" content="${esc(p.avatarUrl)}">` : ''}
   <meta name="twitter:card" content="summary">
   <link rel="icon" href="/favicon.ico">
+  <script id="early-deeplink-detect">
+  (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';window.__IS_INAPP__=ua.indexOf('Instagram')!==-1||ua.indexOf('FBAN')!==-1||ua.indexOf('FBAV')!==-1||ua.indexOf('TikTok')!==-1||ua.indexOf('LinkedInApp')!==-1;window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua)}catch(e){}})();
+  </script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f0f2f5;min-height:100vh;display:flex;justify-content:center}
     .container{width:100%;max-width:480px;background:#fff;min-height:100vh;box-shadow:0 0 20px rgba(0,0,0,.08)}
+
+    /* In-App Browser Overlay */
+    .inapp-overlay{display:none;position:fixed;inset:0;z-index:9999;opacity:0;transition:opacity .3s}
+    .inapp-overlay.active{display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:1}
+    .inapp-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.88);backdrop-filter:blur(10px)}
+    .inapp-btn{position:relative;z-index:2;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;padding:16px 40px;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(102,126,234,.4);transition:transform .2s}
+    .inapp-btn:hover{transform:translateY(-2px)}
+    .inapp-fallback{position:relative;z-index:2;background:rgba(255,255,255,.1);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.2);padding:10px 20px;border-radius:8px;font-size:13px;cursor:pointer;margin-top:16px;transition:background .2s}
+    .inapp-fallback:hover{background:rgba(255,255,255,.15)}
 
     /* Cover */
     .cover{position:relative;height:180px;overflow:hidden}
@@ -344,14 +356,13 @@ function renderProfilePage(data, seo = {}) {
     .delay-4{animation-delay:.4s;opacity:0}
     .delay-5{animation-delay:.5s;opacity:0}
 
-    /* In-App Browser Banner */
-    .inapp-banner{display:none;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:14px 20px;text-align:center;font-size:13px;font-weight:600;cursor:pointer;position:fixed;top:0;left:0;right:0;z-index:1000}
-    .inapp-banner.show{display:block}
   </style>
 </head>
 <body>
-  <div class="inapp-banner" id="inappBanner" onclick="escapeInApp()">
-    Open in browser for the best experience ↗
+  <div id="inappOverlay" class="inapp-overlay">
+    <div class="inapp-backdrop"></div>
+    <button class="inapp-btn" id="openSafariBtn">Open in Browser 😉</button>
+    <button class="inapp-fallback" id="nothingHappened">Nothing happened?</button>
   </div>
   <div class="container">
     <div class="cover animate">${coverHTML}</div>
@@ -375,24 +386,7 @@ function renderProfilePage(data, seo = {}) {
   </div>
 
   <script>
-    // In-App Browser Detection & Escape
-    (function(){
-      var ua = navigator.userAgent || navigator.vendor || '';
-      var inApp = /Instagram|FBAN|FBAV|BytedanceWebview|musical_ly|TikTok|LinkedInApp/i.test(ua);
-      if(inApp){
-        document.getElementById('inappBanner').classList.add('show');
-        document.body.style.paddingTop='48px';
-      }
-    })();
-    function escapeInApp(){
-      var url=window.location.href;
-      var ios=/iPad|iPhone|iPod/.test(navigator.userAgent);
-      if(ios){window.location='x-safari-'+url}
-      else{
-        try{window.location='intent://'+url.replace(/https?:\\/\\//,'')+'#Intent;scheme=https;end'}
-        catch(e){window.open(url,'_system')}
-      }
-    }
+    (function(){if(!window.__IS_INAPP__)return;var isIOS=window.__IS_IOS__;var isAndroid=window.__IS_ANDROID__;var overlay=document.getElementById('inappOverlay');var openBtn=document.getElementById('openSafariBtn');var fallbackBtn=document.getElementById('nothingHappened');if(isIOS){openBtn.textContent='Open in Safari 😉'}else if(isAndroid){openBtn.textContent='Open in Chrome 😉'}else{openBtn.textContent='Open in Browser 😉'}overlay.classList.add('active');function addBrowserParam(url){try{var u=new URL(url);u.searchParams.set('browser','1');return u.toString()}catch(e){return url}}function handleiOSClick(){try{var canonicalUrl=addBrowserParam(window.location.href);var stripped=canonicalUrl.replace(/^https?:\\/\\//,'');var xSafariUrl=canonicalUrl.startsWith('https')?'x-safari-https://'+stripped:'x-safari-http://'+stripped;window.open(xSafariUrl,'_blank')}catch(e){}}function handleAndroidClick(){try{var hostname=window.location.hostname;var pathAndSearch=window.location.pathname+window.location.search;var fallbackUrl=addBrowserParam(window.location.href);var intentUrl='intent://'+hostname+pathAndSearch+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(fallbackUrl)+';end';window.location=intentUrl}catch(e){}}openBtn.onclick=function(e){if(e)e.preventDefault();if(isIOS)handleiOSClick();else if(isAndroid)handleAndroidClick();else window.open(window.location.href,'_blank')};fallbackBtn.onclick=function(e){if(e)e.preventDefault();var url=window.location.href;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(url).then(function(){alert('URL copied!\\n\\nPaste it in Safari to open.\\n\\nOr: tap ••• at top right → "Open in Browser"')}).catch(function(){prompt('Copy this URL and open in Safari:',url)})}else{prompt('Copy this URL and open in Safari:',url)}};if(isAndroid){try{var a=document.createElement('a');a.href=window.location.href;a.target='_blank';a.rel='noopener noreferrer';a.style.display='none';document.body.appendChild(a);a.click();setTimeout(function(){if(a.parentNode)a.parentNode.removeChild(a)},500);setTimeout(function(){handleAndroidClick()},3000)}catch(e){}}})();
   </script>
 </body>
 </html>`;
