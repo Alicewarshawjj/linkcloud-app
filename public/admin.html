@@ -32,7 +32,62 @@
         .tab-content{display:none}
         .tab-content.active{display:block}
         @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
-        .spinner{border:3px solid rgba(255,255,255,.1);border-top:3px solid #667eea;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite}
+        .spinner{border:3px solid rgba(255,255,255,.1);border-top:3px solid #667eea;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:20px auto}
+
+        /* Analytics Styles */
+        .analytics-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+        .analytics-header h2{font-size:18px;font-weight:700;color:#fff}
+        .time-pills{display:flex;gap:6px}
+        .time-pill{padding:6px 14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:20px;color:#888;font-size:11px;font-weight:600;cursor:pointer;transition:all .2s}
+        .time-pill:hover{background:rgba(255,255,255,.08);color:#bbb}
+        .time-pill.active{background:linear-gradient(135deg,#667eea,#764ba2);border-color:transparent;color:#fff}
+
+        .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+        @media(max-width:600px){.stats-row{grid-template-columns:repeat(2,1fr)}}
+        .stat-box{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:16px;text-align:center;transition:all .2s}
+        .stat-box:hover{border-color:rgba(102,126,234,.3);transform:translateY(-2px)}
+        .stat-box.primary{background:linear-gradient(135deg,rgba(102,126,234,.15),rgba(118,75,162,.15));border-color:rgba(102,126,234,.2)}
+        .stat-number{font-size:28px;font-weight:800;margin-bottom:4px}
+        .stat-number.gradient{background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .stat-label{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px}
+
+        .analytics-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+        @media(max-width:700px){.analytics-grid{grid-template-columns:1fr}}
+        .analytics-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:16px}
+        .analytics-card h3{font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+        .analytics-card h3 span{font-size:16px}
+
+        .country-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+        .country-row:last-child{border-bottom:none}
+        .country-flag{font-size:20px;width:28px;text-align:center}
+        .country-info{flex:1}
+        .country-name{font-size:12px;font-weight:600;color:#ddd}
+        .country-bar{height:4px;background:rgba(255,255,255,.08);border-radius:2px;margin-top:4px;overflow:hidden}
+        .country-bar-fill{height:100%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:2px}
+        .country-stats{text-align:right}
+        .country-count{font-size:14px;font-weight:700;color:#667eea}
+        .country-pct{font-size:10px;color:#666}
+
+        .device-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+        .device-item{background:rgba(255,255,255,.03);border-radius:10px;padding:12px 8px;text-align:center}
+        .device-icon{font-size:20px;margin-bottom:6px}
+        .device-name{font-size:10px;color:#888;margin-bottom:4px}
+        .device-count{font-size:16px;font-weight:700;color:#667eea}
+
+        .click-feed{max-height:300px;overflow-y:auto}
+        .click-item{display:flex;align-items:center;gap:10px;padding:10px;background:rgba(255,255,255,.02);border-radius:10px;margin-bottom:8px;transition:background .2s}
+        .click-item:hover{background:rgba(255,255,255,.05)}
+        .click-flag{font-size:18px;width:26px;text-align:center}
+        .click-info{flex:1;min-width:0}
+        .click-title{font-size:12px;font-weight:600;color:#ddd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .click-meta{font-size:10px;color:#666;margin-top:2px;display:flex;gap:8px}
+        .click-meta span{display:flex;align-items:center;gap:3px}
+        .click-time{font-size:10px;color:#555;white-space:nowrap}
+
+        .empty-state{text-align:center;padding:40px 20px;color:#666}
+        .empty-state .icon{font-size:48px;margin-bottom:12px;opacity:.5}
+        .empty-state h4{font-size:14px;color:#888;margin-bottom:6px}
+        .empty-state p{font-size:12px}
 
         .card{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:20px;margin-bottom:16px;transition:all .3s cubic-bezier(0.4, 0, 0.2, 1);box-shadow:0 2px 8px rgba(0,0,0,.1)}
         .card:hover{border-color:rgba(102,126,234,.4);box-shadow:0 4px 16px rgba(102,126,234,.15);transform:translateY(-2px)}
@@ -261,47 +316,49 @@
 
     <!-- TAB: Analytics -->
     <div id="tabAnalytics" class="tab-content">
-        <!-- Stats Overview -->
-        <div class="card">
-            <div class="card-head"><div class="card-title"><i>📊</i> Overview</div></div>
-            <div class="card-body" id="analyticsContent">
-                <div style="text-align:center;padding:40px 20px;color:#666">
-                    <div class="spinner"></div>
-                    <div>Loading analytics...</div>
-                </div>
+        <div class="analytics-header">
+            <h2>📊 Analytics</h2>
+            <div class="time-pills">
+                <button class="time-pill" onclick="setDays(7)">7d</button>
+                <button class="time-pill active" onclick="setDays(30)">30d</button>
+                <button class="time-pill" onclick="setDays(90)">90d</button>
+                <button class="time-pill" onclick="setDays(365)">1y</button>
             </div>
         </div>
 
-        <!-- Countries -->
-        <div class="card">
-            <div class="card-head"><div class="card-title"><i>🌍</i> Countries</div></div>
-            <div class="card-body" id="countriesContent">
-                <div style="text-align:center;padding:20px;color:#666;font-size:13px">Loading...</div>
-            </div>
+        <!-- Stats Row -->
+        <div class="stats-row" id="statsRow">
+            <div class="stat-box primary"><div class="stat-number gradient">-</div><div class="stat-label">Total Clicks</div></div>
+            <div class="stat-box"><div class="stat-number" style="color:#667eea">-</div><div class="stat-label">Social</div></div>
+            <div class="stat-box"><div class="stat-number" style="color:#764ba2">-</div><div class="stat-label">Featured</div></div>
+            <div class="stat-box"><div class="stat-number" style="color:#ff9800">-</div><div class="stat-label">Carousel</div></div>
         </div>
 
-        <!-- Devices & Browsers -->
-        <div class="card">
-            <div class="card-head"><div class="card-title"><i>📱</i> Devices & Browsers</div></div>
-            <div class="card-body" id="devicesContent">
-                <div style="text-align:center;padding:20px;color:#666;font-size:13px">Loading...</div>
+        <!-- Grid -->
+        <div class="analytics-grid">
+            <!-- Countries -->
+            <div class="analytics-card">
+                <h3><span>🌍</span> Countries</h3>
+                <div id="countriesContent"><div class="spinner"></div></div>
             </div>
-        </div>
 
-        <!-- Top Links -->
-        <div class="card">
-            <div class="card-head"><div class="card-title"><i>🔗</i> Top Links</div></div>
-            <div class="card-body" id="topLinksContent">
-                <div style="text-align:center;padding:20px;color:#666;font-size:13px">Loading...</div>
+            <!-- Devices -->
+            <div class="analytics-card">
+                <h3><span>📱</span> Devices & Browsers</h3>
+                <div id="devicesContent"><div class="spinner"></div></div>
             </div>
         </div>
 
         <!-- Recent Clicks -->
-        <div class="card">
-            <div class="card-head"><div class="card-title"><i>⏱️</i> Recent Clicks</div></div>
-            <div class="card-body" id="recentClicksContent">
-                <div style="text-align:center;padding:20px;color:#666;font-size:13px">Loading...</div>
-            </div>
+        <div class="analytics-card" style="margin-bottom:16px">
+            <h3><span>⚡</span> Live Feed</h3>
+            <div class="click-feed" id="recentClicksContent"><div class="spinner"></div></div>
+        </div>
+
+        <!-- Top Links -->
+        <div class="analytics-card">
+            <h3><span>🔗</span> Top Performing Links</h3>
+            <div id="topLinksContent"><div class="spinner"></div></div>
         </div>
     </div><!-- End tabAnalytics -->
 
@@ -838,86 +895,69 @@ function getFlag(code) {
     return String.fromCodePoint(...codePoints);
 }
 
+// Device icons
+const deviceIcons = { Mobile: '📱', Tablet: '📱', Desktop: '💻', Unknown: '🖥️' };
+const osIcons = { iOS: '🍎', Android: '🤖', Windows: '🪟', macOS: '🍎', Linux: '🐧', 'Chrome OS': '💻', Unknown: '🖥️' };
+const browserIcons = { Chrome: '🌐', Safari: '🧭', Firefox: '🦊', Edge: '🌐', Instagram: '📸', Facebook: '👤', TikTok: '🎵', Twitter: '🐦', Opera: '🔴', Unknown: '🌐' };
+
+function setDays(d) {
+    analyticsDays = d;
+    document.querySelectorAll('.time-pill').forEach(p => p.classList.remove('active'));
+    event.target.classList.add('active');
+    loadAnalyticsData();
+}
+
 async function loadAnalyticsData() {
     try {
         const res = await fetch(`/api/analytics/stats?days=${analyticsDays}`, { credentials: 'include' });
         if (!res.ok) throw new Error('Failed to load');
         analyticsData = await res.json();
-        renderAnalyticsOverview();
+        renderStats();
         renderCountries();
         renderDevices();
         renderTopLinks();
         renderRecentClicks();
     } catch (e) {
-        document.getElementById('analyticsContent').innerHTML = `<div style="text-align:center;padding:40px;color:#ff4757">Error: ${e.message}</div>`;
+        document.getElementById('statsRow').innerHTML = `<div class="stat-box" style="grid-column:1/-1;color:#ff4757">Error: ${e.message}</div>`;
     }
 }
 
-function renderAnalyticsOverview() {
-    const { total, byType, daily } = analyticsData;
-    const socialClicks = byType.find(t => t.link_type === 'social')?.clicks || 0;
-    const featuredClicks = byType.find(t => t.link_type === 'featured')?.clicks || 0;
-    const carouselClicks = byType.find(t => t.link_type === 'carousel')?.clicks || 0;
+function renderStats() {
+    const { total, byType } = analyticsData;
+    const social = byType.find(t => t.link_type === 'social')?.clicks || 0;
+    const featured = byType.find(t => t.link_type === 'featured')?.clicks || 0;
+    const carousel = byType.find(t => t.link_type === 'carousel')?.clicks || 0;
 
-    // Mini chart
-    const maxClicks = daily.length ? Math.max(...daily.map(d => parseInt(d.clicks)), 1) : 1;
-    const chartBars = daily.slice().reverse().slice(0, 14).map(d => {
-        const h = Math.max(5, (parseInt(d.clicks) / maxClicks) * 50);
-        return `<div style="flex:1;height:${h}px;background:linear-gradient(to top,#667eea,#764ba2);border-radius:3px"></div>`;
-    }).join('');
-
-    document.getElementById('analyticsContent').innerHTML = `
-        <div style="display:flex;gap:8px;margin-bottom:16px">
-            <button onclick="analyticsDays=7;loadAnalyticsData()" class="btn-sec" style="flex:1;padding:8px;font-size:11px;margin:0;${analyticsDays===7?'background:#667eea;color:#fff;border-color:#667eea':''}">7d</button>
-            <button onclick="analyticsDays=30;loadAnalyticsData()" class="btn-sec" style="flex:1;padding:8px;font-size:11px;margin:0;${analyticsDays===30?'background:#667eea;color:#fff;border-color:#667eea':''}">30d</button>
-            <button onclick="analyticsDays=90;loadAnalyticsData()" class="btn-sec" style="flex:1;padding:8px;font-size:11px;margin:0;${analyticsDays===90?'background:#667eea;color:#fff;border-color:#667eea':''}">90d</button>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
-            <div style="background:linear-gradient(135deg,rgba(102,126,234,.15),rgba(118,75,162,.15));border-radius:12px;padding:16px;text-align:center">
-                <div style="font-size:24px;font-weight:800;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent">${total}</div>
-                <div style="font-size:10px;color:#888;margin-top:2px">TOTAL</div>
-            </div>
-            <div style="background:rgba(102,126,234,.1);border-radius:12px;padding:16px;text-align:center">
-                <div style="font-size:24px;font-weight:800;color:#667eea">${socialClicks}</div>
-                <div style="font-size:10px;color:#888;margin-top:2px">SOCIAL</div>
-            </div>
-            <div style="background:rgba(118,75,162,.1);border-radius:12px;padding:16px;text-align:center">
-                <div style="font-size:24px;font-weight:800;color:#764ba2">${featuredClicks}</div>
-                <div style="font-size:10px;color:#888;margin-top:2px">FEATURED</div>
-            </div>
-            <div style="background:rgba(255,152,0,.1);border-radius:12px;padding:16px;text-align:center">
-                <div style="font-size:24px;font-weight:800;color:#ff9800">${carouselClicks}</div>
-                <div style="font-size:10px;color:#888;margin-top:2px">CAROUSEL</div>
-            </div>
-        </div>
-        <div style="display:flex;align-items:flex-end;gap:3px;height:55px;padding:8px;background:rgba(255,255,255,.02);border-radius:8px">
-            ${chartBars || '<div style="color:#666;font-size:12px;margin:auto">No data</div>'}
-        </div>
+    document.getElementById('statsRow').innerHTML = `
+        <div class="stat-box primary"><div class="stat-number gradient">${total}</div><div class="stat-label">Total Clicks</div></div>
+        <div class="stat-box"><div class="stat-number" style="color:#667eea">${social}</div><div class="stat-label">Social</div></div>
+        <div class="stat-box"><div class="stat-number" style="color:#764ba2">${featured}</div><div class="stat-label">Featured</div></div>
+        <div class="stat-box"><div class="stat-number" style="color:#ff9800">${carousel}</div><div class="stat-label">Carousel</div></div>
     `;
 }
 
 function renderCountries() {
     const { byCountry } = analyticsData;
+    const el = document.getElementById('countriesContent');
+
     if (!byCountry || byCountry.length === 0) {
-        document.getElementById('countriesContent').innerHTML = `<div style="text-align:center;padding:20px;color:#666;font-size:13px">No country data yet</div>`;
+        el.innerHTML = `<div class="empty-state"><div class="icon">🌍</div><h4>No country data</h4><p>Click data will appear here</p></div>`;
         return;
     }
 
     const total = byCountry.reduce((sum, c) => sum + parseInt(c.clicks), 0);
-    document.getElementById('countriesContent').innerHTML = byCountry.map(c => {
-        const pct = Math.round((parseInt(c.clicks) / total) * 100);
+    el.innerHTML = byCountry.slice(0, 6).map(c => {
+        const pct = total > 0 ? Math.round((parseInt(c.clicks) / total) * 100) : 0;
         return `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(255,255,255,.03);border-radius:8px;margin-bottom:8px">
-            <div style="font-size:24px">${getFlag(c.country_code)}</div>
-            <div style="flex:1">
-                <div style="font-size:13px;font-weight:600;color:#ddd">${c.country || 'Unknown'}</div>
-                <div style="height:4px;background:rgba(255,255,255,.1);border-radius:2px;margin-top:4px;overflow:hidden">
-                    <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:2px"></div>
-                </div>
+        <div class="country-row">
+            <div class="country-flag">${getFlag(c.country_code)}</div>
+            <div class="country-info">
+                <div class="country-name">${c.country || 'Unknown'}</div>
+                <div class="country-bar"><div class="country-bar-fill" style="width:${pct}%"></div></div>
             </div>
-            <div style="text-align:right">
-                <div style="font-size:14px;font-weight:700;color:#667eea">${c.clicks}</div>
-                <div style="font-size:10px;color:#888">${pct}%</div>
+            <div class="country-stats">
+                <div class="country-count">${c.clicks}</div>
+                <div class="country-pct">${pct}%</div>
             </div>
         </div>`;
     }).join('');
@@ -925,89 +965,113 @@ function renderCountries() {
 
 function renderDevices() {
     const { byOS, byBrowser, byDevice } = analyticsData;
+    const el = document.getElementById('devicesContent');
 
-    let html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">';
+    const hasData = (byOS && byOS.length > 0) || (byBrowser && byBrowser.length > 0) || (byDevice && byDevice.length > 0);
 
-    // OS
-    html += '<div><div style="font-size:10px;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Operating System</div>';
-    if (byOS && byOS.length > 0) {
-        html += byOS.slice(0, 4).map(o => `
-            <div style="display:flex;justify-content:space-between;padding:6px 8px;background:rgba(255,255,255,.03);border-radius:6px;margin-bottom:4px">
-                <span style="font-size:12px;color:#bbb">${o.os}</span>
-                <span style="font-size:12px;font-weight:600;color:#667eea">${o.clicks}</span>
-            </div>
-        `).join('');
-    } else {
-        html += '<div style="color:#666;font-size:11px">No data</div>';
+    if (!hasData) {
+        el.innerHTML = `<div class="empty-state"><div class="icon">📱</div><h4>No device data</h4><p>Device info will appear here</p></div>`;
+        return;
     }
+
+    let html = '<div class="device-grid">';
+
+    // Show top device
+    if (byDevice && byDevice[0]) {
+        const d = byDevice[0];
+        html += `<div class="device-item"><div class="device-icon">${deviceIcons[d.device] || '🖥️'}</div><div class="device-name">${d.device}</div><div class="device-count">${d.clicks}</div></div>`;
+    }
+
+    // Show top OS
+    if (byOS && byOS[0]) {
+        const o = byOS[0];
+        html += `<div class="device-item"><div class="device-icon">${osIcons[o.os] || '🖥️'}</div><div class="device-name">${o.os}</div><div class="device-count">${o.clicks}</div></div>`;
+    }
+
+    // Show top browser
+    if (byBrowser && byBrowser[0]) {
+        const b = byBrowser[0];
+        html += `<div class="device-item"><div class="device-icon">${browserIcons[b.browser] || '🌐'}</div><div class="device-name">${b.browser}</div><div class="device-count">${b.clicks}</div></div>`;
+    }
+
     html += '</div>';
 
-    // Browser
-    html += '<div><div style="font-size:10px;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Browser</div>';
-    if (byBrowser && byBrowser.length > 0) {
-        html += byBrowser.slice(0, 4).map(b => `
-            <div style="display:flex;justify-content:space-between;padding:6px 8px;background:rgba(255,255,255,.03);border-radius:6px;margin-bottom:4px">
-                <span style="font-size:12px;color:#bbb">${b.browser}</span>
-                <span style="font-size:12px;font-weight:600;color:#764ba2">${b.clicks}</span>
-            </div>
-        `).join('');
-    } else {
-        html += '<div style="color:#666;font-size:11px">No data</div>';
+    // Detailed breakdown
+    html += '<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px">';
+
+    // OS list
+    if (byOS && byOS.length > 1) {
+        html += '<div>';
+        byOS.slice(0, 4).forEach(o => {
+            html += `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:11px"><span style="color:#aaa">${osIcons[o.os] || ''} ${o.os}</span><span style="color:#667eea;font-weight:600">${o.clicks}</span></div>`;
+        });
+        html += '</div>';
     }
+
+    // Browser list
+    if (byBrowser && byBrowser.length > 1) {
+        html += '<div>';
+        byBrowser.slice(0, 4).forEach(b => {
+            html += `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:11px"><span style="color:#aaa">${browserIcons[b.browser] || ''} ${b.browser}</span><span style="color:#764ba2;font-weight:600">${b.clicks}</span></div>`;
+        });
+        html += '</div>';
+    }
+
     html += '</div>';
-
-    // Device
-    html += '<div><div style="font-size:10px;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Device</div>';
-    if (byDevice && byDevice.length > 0) {
-        html += byDevice.map(d => `
-            <div style="display:flex;justify-content:space-between;padding:6px 8px;background:rgba(255,255,255,.03);border-radius:6px;margin-bottom:4px">
-                <span style="font-size:12px;color:#bbb">${d.device === 'Mobile' ? '📱' : d.device === 'Tablet' ? '📱' : '💻'} ${d.device}</span>
-                <span style="font-size:12px;font-weight:600;color:#ff9800">${d.clicks}</span>
-            </div>
-        `).join('');
-    } else {
-        html += '<div style="color:#666;font-size:11px">No data</div>';
-    }
-    html += '</div></div>';
-
-    document.getElementById('devicesContent').innerHTML = html;
+    el.innerHTML = html;
 }
 
 function renderTopLinks() {
     const { topLinks } = analyticsData;
+    const el = document.getElementById('topLinksContent');
+
     if (!topLinks || topLinks.length === 0) {
-        document.getElementById('topLinksContent').innerHTML = `<div style="text-align:center;padding:20px;color:#666;font-size:13px">No clicks recorded yet</div>`;
+        el.innerHTML = `<div class="empty-state"><div class="icon">🔗</div><h4>No links clicked</h4><p>Top performing links appear here</p></div>`;
         return;
     }
 
-    document.getElementById('topLinksContent').innerHTML = topLinks.slice(0, 5).map((link, i) => `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(255,255,255,.03);border-radius:8px;margin-bottom:8px">
-            <div style="width:24px;height:24px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff">${i + 1}</div>
+    const colors = ['#667eea', '#764ba2', '#ff9800', '#4ade80', '#f472b6'];
+    el.innerHTML = topLinks.slice(0, 5).map((link, i) => {
+        const title = link.link_title && !link.link_title.includes('=') ? link.link_title : 'Link ' + (i + 1);
+        return `
+        <div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,.03);border-radius:10px;margin-bottom:8px;border-left:3px solid ${colors[i]}">
+            <div style="width:28px;height:28px;background:${colors[i]};border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff">${i + 1}</div>
             <div style="flex:1;min-width:0">
-                <div style="font-size:13px;font-weight:600;color:#ddd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${link.link_title || 'Untitled'}</div>
+                <div style="font-size:13px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${title}</div>
+                <div style="font-size:10px;color:#666;text-transform:uppercase">${link.link_type}</div>
             </div>
-            <div style="font-weight:700;color:#667eea">${link.clicks}</div>
-        </div>
-    `).join('');
+            <div style="font-size:18px;font-weight:800;color:${colors[i]}">${link.clicks}</div>
+        </div>`;
+    }).join('');
 }
 
 function renderRecentClicks() {
     const { recent } = analyticsData;
+    const el = document.getElementById('recentClicksContent');
+
     if (!recent || recent.length === 0) {
-        document.getElementById('recentClicksContent').innerHTML = `<div style="text-align:center;padding:20px;color:#666;font-size:13px">No recent clicks</div>`;
+        el.innerHTML = `<div class="empty-state"><div class="icon">⚡</div><h4>No recent activity</h4><p>Live clicks will appear here</p></div>`;
         return;
     }
 
-    document.getElementById('recentClicksContent').innerHTML = recent.slice(0, 10).map(r => {
-        const time = new Date(r.clicked_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    el.innerHTML = recent.slice(0, 15).map(r => {
+        const time = new Date(r.clicked_at);
+        const timeStr = time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        const dateStr = time.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const title = r.link_title && !r.link_title.includes('=') ? r.link_title : 'Link';
+
         return `
-        <div style="display:flex;align-items:center;gap:10px;padding:8px;background:rgba(255,255,255,.02);border-radius:6px;margin-bottom:6px;font-size:12px">
-            <div style="font-size:18px">${getFlag(r.country_code)}</div>
-            <div style="flex:1;min-width:0">
-                <div style="color:#ddd;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.link_title || 'Link'}</div>
-                <div style="color:#666;font-size:10px">${r.os || ''} · ${r.browser || ''}</div>
+        <div class="click-item">
+            <div class="click-flag">${getFlag(r.country_code)}</div>
+            <div class="click-info">
+                <div class="click-title">${title}</div>
+                <div class="click-meta">
+                    <span>${deviceIcons[r.device] || ''} ${r.device || 'Unknown'}</span>
+                    <span>${r.os || ''}</span>
+                    <span>${browserIcons[r.browser] || ''} ${r.browser || ''}</span>
+                </div>
             </div>
-            <div style="color:#888;font-size:10px;text-align:right;white-space:nowrap">${time}</div>
+            <div class="click-time">${dateStr}<br>${timeStr}</div>
         </div>`;
     }).join('');
 }
