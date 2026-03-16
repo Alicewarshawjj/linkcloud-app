@@ -20,6 +20,8 @@
         .topbar .status-dot.online{background:#4ade80;box-shadow:0 0 6px #4ade80}
         .topbar .status-dot.offline{background:#ff4757;box-shadow:0 0 6px #ff4757}
         .topbar .status-text{font-size:10px;color:#666;margin-right:auto}
+        .analytics-btn{background:rgba(102,126,234,.15);border:1px solid rgba(102,126,234,.3);color:#667eea;padding:8px 14px;border-radius:8px;text-decoration:none;font-size:16px;transition:all .2s;display:flex;align-items:center;gap:6px}
+        .analytics-btn:hover{background:rgba(102,126,234,.25);transform:translateY(-1px)}
 
         .card{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:20px;margin-bottom:16px;transition:all .3s cubic-bezier(0.4, 0, 0.2, 1);box-shadow:0 2px 8px rgba(0,0,0,.1)}
         .card:hover{border-color:rgba(102,126,234,.4);box-shadow:0 4px 16px rgba(102,126,234,.15);transform:translateY(-2px)}
@@ -136,6 +138,7 @@
         <span class="tag">ADMIN</span>
         <div class="status-dot online" id="statusDot"></div>
         <span class="status-text" id="statusText">Connected</span>
+        <a href="/analytics.html" class="analytics-btn" title="View Analytics">📊</a>
     </div>
 
     <!-- PROFILE -->

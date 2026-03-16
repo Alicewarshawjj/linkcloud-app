@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analytics - LinkCloud</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #0a0f1f 0%, #1a1f2e 100%);
+      color: #fff;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 0 32px;
+      border-bottom: 1px solid rgba(255,255,255,.1);
+      margin-bottom: 32px;
+    }
+    .header h1 {
+      font-size: 28px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .back-btn {
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.1);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all .2s;
+    }
+    .back-btn:hover {
+      background: rgba(255,255,255,.08);
+      border-color: rgba(102,126,234,.4);
+    }
+
+    /* Time Filter */
+    .time-filter {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .time-btn {
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.1);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .time-btn:hover {
+      background: rgba(255,255,255,.08);
+    }
+    .time-btn.active {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border-color: transparent;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .stat-card {
+      background: rgba(255,255,255,.035);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 16px;
+      padding: 24px;
+      transition: all .3s;
+    }
+    .stat-card:hover {
+      border-color: rgba(102,126,234,.4);
+      transform: translateY(-2px);
+    }
+    .stat-label {
+      color: rgba(255,255,255,.6);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 8px;
+    }
+    .stat-value {
+      font-size: 32px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Charts Section */
+    .section {
+      background: rgba(255,255,255,.035);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      color: #667eea;
+    }
+
+    /* Table */
+    .table-wrapper {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th {
+      text-align: left;
+      padding: 12px;
+      color: rgba(255,255,255,.6);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      border-bottom: 1px solid rgba(255,255,255,.1);
+    }
+    td {
+      padding: 16px 12px;
+      border-bottom: 1px solid rgba(255,255,255,.05);
+      font-size: 14px;
+    }
+    tr:hover {
+      background: rgba(255,255,255,.02);
+    }
+    .link-title {
+      font-weight: 600;
+      color: #fff;
+    }
+    .link-url {
+      color: rgba(255,255,255,.5);
+      font-size: 12px;
+      margin-top: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 300px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-social { background: rgba(102,126,234,.2); color: #667eea; }
+    .badge-featured { background: rgba(118,75,162,.2); color: #764ba2; }
+    .badge-carousel { background: rgba(255,152,0,.2); color: #ff9800; }
+
+    /* Chart Container */
+    .chart-container {
+      height: 250px;
+      position: relative;
+    }
+    .chart-bar {
+      display: flex;
+      align-items: flex-end;
+      height: 100%;
+      gap: 8px;
+    }
+    .bar-item {
+      flex: 1;
+      background: linear-gradient(to top, #667eea, #764ba2);
+      border-radius: 6px 6px 0 0;
+      position: relative;
+      min-height: 10px;
+      transition: opacity .2s;
+      cursor: pointer;
+    }
+    .bar-item:hover {
+      opacity: .8;
+    }
+    .bar-label {
+      position: absolute;
+      bottom: -24px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: rgba(255,255,255,.4);
+      white-space: nowrap;
+    }
+    .bar-value {
+      position: absolute;
+      top: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      font-weight: 600;
+      color: #667eea;
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 60px 20px;
+      color: rgba(255,255,255,.4);
+    }
+    .spinner {
+      border: 3px solid rgba(255,255,255,.1);
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+    }
+    .empty-state svg {
+      width: 80px;
+      height: 80px;
+      opacity: .3;
+      margin-bottom: 16px;
+    }
+    .empty-state h3 {
+      font-size: 18px;
+      margin-bottom: 8px;
+      color: rgba(255,255,255,.6);
+    }
+    .empty-state p {
+      color: rgba(255,255,255,.4);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📊 Analytics</h1>
+      <a href="/admin" class="back-btn">← Back to Admin</a>
+    </div>
+
+    <div class="time-filter">
+      <button class="time-btn" data-days="7">Last 7 Days</button>
+      <button class="time-btn active" data-days="30">Last 30 Days</button>
+      <button class="time-btn" data-days="90">Last 90 Days</button>
+      <button class="time-btn" data-days="365">Last Year</button>
+    </div>
+
+    <div id="content">
+      <div class="loading">
+        <div class="spinner"></div>
+        <div>Loading analytics...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentDays = 30;
+
+    async function loadAnalytics() {
+      try {
+        const res = await fetch(`/api/analytics/stats?days=${currentDays}`);
+        if (!res.ok) throw new Error('Failed to load analytics');
+        const data = await res.json();
+        renderAnalytics(data);
+      } catch (e) {
+        document.getElementById('content').innerHTML = `
+          <div class="empty-state">
+            <h3>Error loading analytics</h3>
+            <p>${e.message}</p>
+          </div>
+        `;
+      }
+    }
+
+    function renderAnalytics(data) {
+      const { total, byType, topLinks, daily } = data;
+
+      if (total === 0) {
+        document.getElementById('content').innerHTML = `
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+            </svg>
+            <h3>No data yet</h3>
+            <p>Share your profile link to start tracking clicks!</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Calculate stats
+      const socialClicks = byType.find(t => t.link_type === 'social')?.clicks || 0;
+      const featuredClicks = byType.find(t => t.link_type === 'featured')?.clicks || 0;
+      const carouselClicks = byType.find(t => t.link_type === 'carousel')?.clicks || 0;
+
+      // Render
+      let html = `
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total Clicks</div>
+            <div class="stat-value">${total.toLocaleString()}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Social Clicks</div>
+            <div class="stat-value">${socialClicks.toLocaleString()}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Featured Clicks</div>
+            <div class="stat-value">${featuredClicks.toLocaleString()}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Carousel Clicks</div>
+            <div class="stat-value">${carouselClicks.toLocaleString()}</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Clicks Over Time</div>
+          <div class="chart-container">
+            ${renderDailyChart(daily)}
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Top Links</div>
+          <div class="table-wrapper">
+            ${renderTopLinksTable(topLinks)}
+          </div>
+        </div>
+      `;
+
+      document.getElementById('content').innerHTML = html;
+    }
+
+    function renderDailyChart(daily) {
+      if (!daily || daily.length === 0) return '<p style="color:rgba(255,255,255,.4);text-align:center;">No data</p>';
+
+      const maxClicks = Math.max(...daily.map(d => parseInt(d.clicks)));
+      const bars = daily.slice().reverse().map(d => {
+        const height = (parseInt(d.clicks) / maxClicks) * 100;
+        const date = new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return `
+          <div class="bar-item" style="height:${height}%">
+            <div class="bar-value">${d.clicks}</div>
+            <div class="bar-label">${date}</div>
+          </div>
+        `;
+      }).join('');
+
+      return `<div class="chart-bar">${bars}</div>`;
+    }
+
+    function renderTopLinksTable(links) {
+      if (!links || links.length === 0) return '<p style="color:rgba(255,255,255,.4);text-align:center;padding:20px;">No clicks yet</p>';
+
+      const rows = links.map(link => {
+        const badgeClass = link.link_type === 'social' ? 'badge-social' : link.link_type === 'featured' ? 'badge-featured' : 'badge-carousel';
+        return `
+          <tr>
+            <td>
+              <div class="link-title">${link.link_title || 'Untitled'}</div>
+              ${link.link_url ? `<div class="link-url">${link.link_url}</div>` : ''}
+            </td>
+            <td><span class="badge ${badgeClass}">${link.link_type}</span></td>
+            <td style="text-align:right;font-weight:700;color:#667eea;">${link.clicks}</td>
+          </tr>
+        `;
+      }).join('');
+
+      return `
+        <table>
+          <thead>
+            <tr>
+              <th>Link</th>
+              <th>Type</th>
+              <th style="text-align:right;">Clicks</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    // Time filter buttons
+    document.querySelectorAll('.time-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentDays = parseInt(btn.dataset.days);
+        document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div><div>Loading analytics...</div></div>';
+        loadAnalytics();
+      });
+    });
+
+    // Initial load
+    loadAnalytics();
+  </script>
+</body>
+</html>

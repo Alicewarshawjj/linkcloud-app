@@ -38,6 +38,24 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS analytics (
+        id SERIAL PRIMARY KEY,
+        slug VARCHAR(100) NOT NULL DEFAULT 'main',
+        link_type VARCHAR(50) NOT NULL,
+        link_id VARCHAR(100),
+        link_url TEXT,
+        link_title TEXT,
+        user_agent TEXT,
+        ip_address VARCHAR(45),
+        country VARCHAR(2),
+        referrer TEXT,
+        clicked_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_analytics_slug ON analytics(slug);
+      CREATE INDEX IF NOT EXISTS idx_analytics_clicked_at ON analytics(clicked_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_analytics_link_type ON analytics(link_type);
     `);
 
     // Create default admin user if not exists
@@ -167,6 +185,76 @@ app.put('/api/content', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     console.error('Save content error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ═══ ANALYTICS API ═══
+app.post('/api/analytics/click', async (req, res) => {
+  try {
+    const { link_type, link_id, link_url, link_title } = req.body;
+    const user_agent = req.headers['user-agent'] || '';
+    const ip_address = req.headers['x-forwarded-for']?.split(',')[0] || req.ip || '';
+    const referrer = req.headers.referer || '';
+
+    await pool.query(
+      `INSERT INTO analytics (slug, link_type, link_id, link_url, link_title, user_agent, ip_address, referrer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      ['main', link_type, link_id, link_url, link_title, user_agent, ip_address, referrer]
+    );
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('Analytics error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/analytics/stats', requireAuth, async (req, res) => {
+  try {
+    const { days = 30 } = req.query;
+
+    // Total clicks
+    const totalResult = await pool.query(
+      `SELECT COUNT(*) as total FROM analytics WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${parseInt(days)} days'`
+    );
+
+    // Clicks by link type
+    const byTypeResult = await pool.query(
+      `SELECT link_type, COUNT(*) as clicks
+       FROM analytics
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${parseInt(days)} days'
+       GROUP BY link_type
+       ORDER BY clicks DESC`
+    );
+
+    // Top links
+    const topLinksResult = await pool.query(
+      `SELECT link_type, link_title, link_url, COUNT(*) as clicks
+       FROM analytics
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${parseInt(days)} days'
+       GROUP BY link_type, link_title, link_url
+       ORDER BY clicks DESC
+       LIMIT 10`
+    );
+
+    // Clicks over time (daily)
+    const dailyResult = await pool.query(
+      `SELECT DATE(clicked_at) as date, COUNT(*) as clicks
+       FROM analytics
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${parseInt(days)} days'
+       GROUP BY DATE(clicked_at)
+       ORDER BY date DESC`
+    );
+
+    res.json({
+      total: parseInt(totalResult.rows[0]?.total || 0),
+      byType: byTypeResult.rows,
+      topLinks: topLinksResult.rows,
+      daily: dailyResult.rows
+    });
+  } catch (e) {
+    console.error('Get stats error:', e);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -386,6 +474,43 @@ function renderProfilePage(data, seo = {}) {
   </div>
 
   <script>
+    // Analytics tracking
+    function trackClick(linkType, linkId, linkUrl, linkTitle) {
+      try {
+        fetch('/api/analytics/click', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ link_type: linkType, link_id: linkId, link_url: linkUrl, link_title: linkTitle })
+        });
+      } catch(e) {}
+    }
+
+    // Track social clicks
+    document.querySelectorAll('.social-link a, .social-icon').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var type = this.getAttribute('aria-label') || 'social';
+        var url = this.href || '';
+        trackClick('social', type, url, type);
+      });
+    });
+
+    // Track featured link clicks
+    document.querySelectorAll('.feat-link a').forEach(function(el, idx) {
+      el.addEventListener('click', function() {
+        var title = this.querySelector('.feat-title')?.textContent || 'Featured Link ' + (idx + 1);
+        trackClick('featured', 'feat-' + idx, this.href, title);
+      });
+    });
+
+    // Track carousel clicks
+    document.querySelectorAll('.car-link a').forEach(function(el, idx) {
+      el.addEventListener('click', function() {
+        var title = this.querySelector('.car-title')?.textContent || 'Carousel ' + (idx + 1);
+        trackClick('carousel', 'car-' + idx, this.href, title);
+      });
+    });
+
+    // Deep linking script
     (function(){if(!window.__IS_INAPP__)return;var isIOS=window.__IS_IOS__;var isAndroid=window.__IS_ANDROID__;var overlay=document.getElementById('inappOverlay');var openBtn=document.getElementById('openSafariBtn');var fallbackBtn=document.getElementById('nothingHappened');if(isIOS){openBtn.textContent='Open in Safari 😉'}else if(isAndroid){openBtn.textContent='Open in Chrome 😉'}else{openBtn.textContent='Open in Browser 😉'}overlay.classList.add('active');function addBrowserParam(url){try{var u=new URL(url);u.searchParams.set('browser','1');return u.toString()}catch(e){return url}}function handleiOSClick(){try{var canonicalUrl=addBrowserParam(window.location.href);var stripped=canonicalUrl.replace(/^https?:\\/\\//,'');var xSafariUrl=canonicalUrl.startsWith('https')?'x-safari-https://'+stripped:'x-safari-http://'+stripped;window.open(xSafariUrl,'_blank')}catch(e){}}function handleAndroidClick(){try{var hostname=window.location.hostname;var pathAndSearch=window.location.pathname+window.location.search;var fallbackUrl=addBrowserParam(window.location.href);var intentUrl='intent://'+hostname+pathAndSearch+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(fallbackUrl)+';end';window.location=intentUrl}catch(e){}}openBtn.onclick=function(e){if(e)e.preventDefault();if(isIOS)handleiOSClick();else if(isAndroid)handleAndroidClick();else window.open(window.location.href,'_blank')};fallbackBtn.onclick=function(e){if(e)e.preventDefault();var url=window.location.href;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(url).then(function(){alert('URL copied!\\n\\nPaste it in Safari to open.\\n\\nOr: tap ••• at top right → "Open in Browser"')}).catch(function(){prompt('Copy this URL and open in Safari:',url)})}else{prompt('Copy this URL and open in Safari:',url)}};if(isAndroid){try{var a=document.createElement('a');a.href=window.location.href;a.target='_blank';a.rel='noopener noreferrer';a.style.display='none';document.body.appendChild(a);a.click();setTimeout(function(){if(a.parentNode)a.parentNode.removeChild(a)},500);setTimeout(function(){handleAndroidClick()},3000)}catch(e){}}})();
   </script>
 </body>
