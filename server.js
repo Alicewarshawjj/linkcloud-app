@@ -1279,13 +1279,18 @@ app.use((err, req, res, next) => {
 // Start server immediately, then initialize DB
 app.listen(PORT, () => {
   console.log(`🚀 cmehere.net starting on port ${PORT}`);
+  console.log(`📊 DATABASE_URL exists: ${!!process.env.DATABASE_URL}`);
 
   // Initialize DB after server is listening
   initDB().then(() => {
     dbReady = true;
     console.log(`✅ Database ready, server fully operational`);
   }).catch(err => {
-    console.error('Failed to initialize database:', err);
-    // Don't exit - let healthcheck still work but log the error
+    console.error('❌ Failed to initialize database:', err.message);
+    console.error('Full error:', err);
+    // Still set dbReady to true to allow page to load (with empty data)
+    // This prevents infinite "Starting up" screen
+    dbReady = true;
+    console.log('⚠️ Running without database - some features may not work');
   });
 });
