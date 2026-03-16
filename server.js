@@ -227,89 +227,18 @@ function getRequestFingerprint(req) {
   return crypto.createHash('sha256').update(data).digest('hex').slice(0, 16);
 }
 
-// ═══ ADVANCED LINK ENCRYPTION/OBFUSCATION ═══
-// Pentagon-level: Multiple layers of obfuscation
+// ═══ LINK ENCODING (Simple & Reliable) ═══
+// Base64 with salt - simple but effective for hiding from crawlers
 
-// XOR cipher for additional obfuscation
-function xorCipher(str, key) {
-  let result = '';
-  for (let i = 0; i < str.length; i++) {
-    result += String.fromCharCode(str.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-  }
-  return result;
-}
-
-// Generate session-specific encryption key
-function generateSessionKey() {
-  return crypto.randomBytes(8).toString('hex');
-}
-
-function encodeLink(url, sessionKey = null) {
-  // Layer 1: XOR with session key
-  const key = sessionKey || 'lc' + Date.now().toString(36);
-  const xored = xorCipher(url, key);
-
-  // Layer 2: Base64 encode
-  const b64 = Buffer.from(xored, 'binary').toString('base64');
-
-  // Layer 3: Reverse and add salt
-  const salt = crypto.randomBytes(4).toString('hex');
-  const reversed = b64.split('').reverse().join('');
-
-  // Layer 4: Interleave salt with encoded string
-  let result = '';
-  for (let i = 0; i < Math.max(salt.length, reversed.length); i++) {
-    if (i < salt.length) result += salt[i];
-    if (i < reversed.length) result += reversed[i];
-  }
-
-  return key.slice(0, 8) + '.' + result;
+function encodeLink(url) {
+  // Simple base64 encoding - crawlers can't execute JS to decode
+  const encoded = Buffer.from(url).toString('base64');
+  return encoded;
 }
 
 function decodeLink(encoded) {
   try {
-    const parts = encoded.split('.');
-    if (parts.length !== 2) return null;
-
-    const key = 'lc' + parts[0].slice(2); // Reconstruct key
-    const interleaved = parts[1];
-
-    // Layer 4: De-interleave
-    let salt = '', reversed = '';
-    for (let i = 0; i < interleaved.length; i++) {
-      if (i % 2 === 0) salt += interleaved[i];
-      else reversed += interleaved[i];
-    }
-
-    // Layer 3: Un-reverse
-    const b64 = reversed.split('').reverse().join('');
-
-    // Layer 2: Base64 decode
-    const xored = Buffer.from(b64, 'base64').toString('binary');
-
-    // Layer 1: XOR decrypt
-    return xorCipher(xored, key);
-  } catch {
-    return null;
-  }
-}
-
-// Generate time-limited tokens for extra protection
-function generateLinkToken(linkId, expiresIn = 3600) {
-  const payload = { id: linkId, exp: Date.now() + (expiresIn * 1000) };
-  const data = Buffer.from(JSON.stringify(payload)).toString('base64');
-  const signature = crypto.createHmac('sha256', LINK_ENCRYPTION_KEY).update(data).digest('hex').slice(0, 16);
-  return data + '.' + signature;
-}
-
-function verifyLinkToken(token) {
-  try {
-    const [data, sig] = token.split('.');
-    const expectedSig = crypto.createHmac('sha256', LINK_ENCRYPTION_KEY).update(data).digest('hex').slice(0, 16);
-    if (sig !== expectedSig) return null;
-    const payload = JSON.parse(Buffer.from(data, 'base64').toString());
-    if (payload.exp < Date.now()) return null;
-    return payload.id;
+    return Buffer.from(encoded, 'base64').toString('utf8');
   } catch {
     return null;
   }
@@ -540,22 +469,18 @@ app.get('/', async (req, res) => {
     const seo = result.rows[0].seo || {};
     const userAgent = req.headers['user-agent'] || '';
 
-    // Enhanced bot detection with request fingerprinting
+    // Bot detection
     const isBotRequest = isBot(userAgent, req);
-    const fingerprint = getRequestFingerprint(req);
 
-    // Generate session key for this request
-    const sessionKey = 'lc' + Date.now().toString(36);
-
-    res.send(renderProfilePage(data, seo, isBotRequest, sessionKey, fingerprint));
+    res.send(renderProfilePage(data, seo, isBotRequest));
   } catch (e) {
     console.error('Render error:', e);
     res.status(500).send('Server error');
   }
 });
 
-// ═══ PROFILE RENDERER (Pentagon-Level Link Protection v2.0) ═══
-function renderProfilePage(data, seo = {}, isBotRequest = false, sessionKey = null, fingerprint = null) {
+// ═══ PROFILE RENDERER (Link Protection) ═══
+function renderProfilePage(data, seo = {}, isBotRequest = false) {
   const p = data.profile || {};
   const socials = data.socials || [];
   const feats = data.feats || [];
@@ -592,24 +517,20 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, sessionKey = nu
   // PENTAGON-LEVEL PROTECTION: Links are NOT in HTML for bots
   // ════════════════════════════════════════════════════════════════
 
-  // Prepare link data for JavaScript injection (multi-layer obfuscation)
-  const key = sessionKey || 'lc' + Date.now().toString(36);
+  // Prepare link data for JavaScript injection (base64 encoded)
   const linkData = {
-    _v: 2, // Version for client-side decoder
-    _f: fingerprint, // Request fingerprint for validation
-    _t: Date.now(), // Timestamp for expiry
     s: socials.filter(s => s.url).map((s, i) => ({
       i: `s${i}`,
       t: s.type,
-      d: encodeLink(s.url, key)
+      d: encodeLink(s.url)
     })),
     f: feats.filter(f => f.url).map((f, i) => ({
       i: `f${i}`,
-      d: encodeLink(f.url, key)
+      d: encodeLink(f.url)
     })),
     c: cars.filter(c => c.url).map((c, i) => ({
       i: `c${i}`,
-      d: encodeLink(c.url, key)
+      d: encodeLink(c.url)
     }))
   };
 
@@ -774,146 +695,61 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, sessionKey = nu
     <a href="/link/trap-${Date.now().toString(36)}" style="display:none!important">secret</a>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════════════════════════════ -->
-  <!-- PENTAGON-LEVEL LINK PROTECTION v2.0                                        -->
-  <!-- Multi-layer encryption, anti-debugging, bot fingerprinting                 -->
-  <!-- Links are decrypted client-side with runtime verification                  -->
-  <!-- ═══════════════════════════════════════════════════════════════════════════ -->
-  <script id="_0x" type="application/json">${encodedPayload}</script>
+  <!-- Link Protection: Links decoded client-side, invisible to crawlers -->
+  <script id="_lp" type="application/json">${encodedPayload}</script>
   <script>
     (function(){
-      // Anti-debugging measures
-      var _0xd = function() {
-        var threshold = 100;
-        var start = performance.now();
-        debugger;
-        return performance.now() - start > threshold;
-      };
-
-      // Bot detection client-side (relaxed - only catch obvious bots)
-      var _0xb = function() {
-        var webdriver = navigator.webdriver === true;
-        return webdriver; // Only block obvious automation
-      };
-
-      // XOR cipher (mirror of server)
-      var _0xx = function(s, k) {
-        var r = '';
-        for (var i = 0; i < s.length; i++) {
-          r += String.fromCharCode(s.charCodeAt(i) ^ k.charCodeAt(i % k.length));
-        }
-        return r;
-      };
-
-      // Decode the obfuscated link payload
       try {
-        // Delay execution slightly to avoid timing-based detection
-        setTimeout(function() {
-          if (_0xb()) return; // Silent fail for bots
+        var payload = document.getElementById('_lp');
+        if (!payload) return;
 
-          var payload = document.getElementById('_0x');
-          if (!payload) return;
+        var decoded = atob(payload.textContent);
+        var linkData = JSON.parse(decoded);
 
-          var decoded = atob(payload.textContent);
-          var linkData = JSON.parse(decoded);
+        // Simple base64 decoder
+        function decodeLink(encoded) {
+          try {
+            return atob(encoded);
+          } catch(e) { return null; }
+        }
 
-          // Multi-layer link decoder
-          function decodeLink(encoded) {
-            try {
-              var parts = encoded.split('.');
-              if (parts.length !== 2) return null;
+        // Build link map
+        var linkMap = {};
+        (linkData.s || []).forEach(function(item) { linkMap[item.i] = decodeLink(item.d); });
+        (linkData.f || []).forEach(function(item) { linkMap[item.i] = decodeLink(item.d); });
+        (linkData.c || []).forEach(function(item) { linkMap[item.i] = decodeLink(item.d); });
 
-              var key = 'lc' + parts[0].slice(2);
-              var interleaved = parts[1];
+        // Attach click handlers
+        document.querySelectorAll('[data-link-id]').forEach(function(el) {
+          var linkId = el.getAttribute('data-link-id');
+          var url = linkMap[linkId];
+          if (!url) return;
 
-              // De-interleave
-              var reversed = '';
-              for (var i = 1; i < interleaved.length; i += 2) {
-                reversed += interleaved[i];
-              }
+          el.style.cursor = 'pointer';
+          el.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
 
-              // Un-reverse and decode
-              var b64 = reversed.split('').reverse().join('');
-              var xored = atob(b64);
+            // Track click
+            var type = linkId.charAt(0) === 's' ? 'social' : linkId.charAt(0) === 'f' ? 'featured' : 'carousel';
+            var title = el.getAttribute('aria-label') || (el.querySelector('.feat-title, .car-title') || {}).textContent || 'Link';
 
-              // XOR decrypt
-              return _0xx(xored, key);
-            } catch(e) { return null; }
-          }
+            fetch('/api/analytics/click', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ link_type: type, link_id: linkId, link_url: url, link_title: title })
+            }).catch(function(){});
 
-          // Verify payload version and check expiry
-          if (linkData._v !== 2) return;
-          if (linkData._t && Date.now() - linkData._t > 86400000) return; // 24h expiry
-
-          // Build link map with delayed processing
-          var linkMap = {};
-          var items = (linkData.s || []).concat(linkData.f || []).concat(linkData.c || []);
-          items.forEach(function(item) {
-            linkMap[item.i] = decodeLink(item.d);
+            // Open link
+            window.open(url, '_blank', 'noopener,noreferrer');
           });
+        });
 
-          // Dynamic event attachment with mutation protection
-          function attachHandlers() {
-            document.querySelectorAll('[data-link-id]').forEach(function(el) {
-              if (el._lc_bound) return;
-              el._lc_bound = true;
-
-              var linkId = el.getAttribute('data-link-id');
-              var url = linkMap[linkId];
-              if (!url) return;
-
-              el.style.cursor = 'pointer';
-
-              // Use both click and touch for mobile
-              ['click', 'touchend'].forEach(function(evt) {
-                el.addEventListener(evt, function(e) {
-                  if (evt === 'touchend') e.preventDefault();
-                  if (e.type === 'click' && e.pointerType === 'touch') return;
-
-                  // Track click
-                  var type = linkId.charAt(0) === 's' ? 'social' : linkId.charAt(0) === 'f' ? 'featured' : 'carousel';
-                  var title = el.getAttribute('aria-label') || (el.querySelector('.feat-title, .car-title') || {}).textContent || 'Link';
-                  console.log('[Analytics] Tracking click:', type, linkId, url);
-                  fetch('/api/analytics/click', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ link_type: type, link_id: linkId, link_url: url, link_title: title }),
-                    keepalive: true
-                  }).then(function(r) {
-                    console.log('[Analytics] Response:', r.status);
-                  }).catch(function(e){
-                    console.error('[Analytics] Error:', e);
-                  });
-
-                  // Open link
-                  window.open(url, '_blank', 'noopener,noreferrer');
-                }, { passive: false });
-              });
-            });
-          }
-
-          attachHandlers();
-
-          // Observe for dynamic content
-          if (typeof MutationObserver !== 'undefined') {
-            new MutationObserver(attachHandlers).observe(document.body, { childList: true, subtree: true });
-          }
-
-          // Remove payload and clean traces
-          payload.remove();
-
-          // Obfuscate the linkMap in memory
-          Object.keys(linkMap).forEach(function(k) {
-            var v = linkMap[k];
-            Object.defineProperty(linkMap, k, {
-              get: function() { return v; },
-              enumerable: false,
-              configurable: false
-            });
-          });
-
-        }, 50 + Math.random() * 100); // Random delay
-      } catch(e) {}
+        // Remove payload
+        payload.remove();
+      } catch(e) {
+        console.error('Link init error:', e);
+      }
     })();
 
     // Deep linking script (unchanged)
