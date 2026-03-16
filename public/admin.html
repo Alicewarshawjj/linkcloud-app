@@ -261,26 +261,45 @@
 
     <!-- TAB: Analytics -->
     <div id="tabAnalytics" class="tab-content">
+        <!-- Stats Overview -->
         <div class="card">
-            <div class="card-head"><div class="card-title"><i>📊</i> Analytics Overview</div></div>
+            <div class="card-head"><div class="card-title"><i>📊</i> Overview</div></div>
             <div class="card-body" id="analyticsContent">
                 <div style="text-align:center;padding:40px 20px;color:#666">
-                    <div class="spinner" style="border:3px solid rgba(255,255,255,.1);border-top:3px solid #667eea;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:0 auto 16px"></div>
+                    <div class="spinner"></div>
                     <div>Loading analytics...</div>
                 </div>
             </div>
         </div>
 
+        <!-- Countries -->
         <div class="card">
-            <div class="card-head"><div class="card-title"><i>📈</i> Top Links</div></div>
+            <div class="card-head"><div class="card-title"><i>🌍</i> Countries</div></div>
+            <div class="card-body" id="countriesContent">
+                <div style="text-align:center;padding:20px;color:#666;font-size:13px">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Devices & Browsers -->
+        <div class="card">
+            <div class="card-head"><div class="card-title"><i>📱</i> Devices & Browsers</div></div>
+            <div class="card-body" id="devicesContent">
+                <div style="text-align:center;padding:20px;color:#666;font-size:13px">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Top Links -->
+        <div class="card">
+            <div class="card-head"><div class="card-title"><i>🔗</i> Top Links</div></div>
             <div class="card-body" id="topLinksContent">
                 <div style="text-align:center;padding:20px;color:#666;font-size:13px">Loading...</div>
             </div>
         </div>
 
+        <!-- Recent Clicks -->
         <div class="card">
-            <div class="card-head"><div class="card-title"><i>📅</i> Recent Activity</div></div>
-            <div class="card-body" id="recentActivityContent">
+            <div class="card-head"><div class="card-title"><i>⏱️</i> Recent Clicks</div></div>
+            <div class="card-body" id="recentClicksContent">
                 <div style="text-align:center;padding:20px;color:#666;font-size:13px">Loading...</div>
             </div>
         </div>
@@ -812,50 +831,146 @@ function switchTab(tab) {
 let analyticsData = null;
 let analyticsDays = 30;
 
+// Country flag emoji from country code
+function getFlag(code) {
+    if (!code || code === 'XX' || code.length !== 2) return '🌍';
+    const codePoints = code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0));
+    return String.fromCodePoint(...codePoints);
+}
+
 async function loadAnalyticsData() {
     try {
         const res = await fetch(`/api/analytics/stats?days=${analyticsDays}`, { credentials: 'include' });
         if (!res.ok) throw new Error('Failed to load');
         analyticsData = await res.json();
         renderAnalyticsOverview();
+        renderCountries();
+        renderDevices();
         renderTopLinks();
-        renderRecentActivity();
+        renderRecentClicks();
     } catch (e) {
-        document.getElementById('analyticsContent').innerHTML = `<div style="text-align:center;padding:40px;color:#ff4757">Error loading analytics: ${e.message}</div>`;
+        document.getElementById('analyticsContent').innerHTML = `<div style="text-align:center;padding:40px;color:#ff4757">Error: ${e.message}</div>`;
     }
 }
 
 function renderAnalyticsOverview() {
-    const { total, byType } = analyticsData;
+    const { total, byType, daily } = analyticsData;
     const socialClicks = byType.find(t => t.link_type === 'social')?.clicks || 0;
     const featuredClicks = byType.find(t => t.link_type === 'featured')?.clicks || 0;
     const carouselClicks = byType.find(t => t.link_type === 'carousel')?.clicks || 0;
 
+    // Mini chart
+    const maxClicks = daily.length ? Math.max(...daily.map(d => parseInt(d.clicks)), 1) : 1;
+    const chartBars = daily.slice().reverse().slice(0, 14).map(d => {
+        const h = Math.max(5, (parseInt(d.clicks) / maxClicks) * 50);
+        return `<div style="flex:1;height:${h}px;background:linear-gradient(to top,#667eea,#764ba2);border-radius:3px"></div>`;
+    }).join('');
+
     document.getElementById('analyticsContent').innerHTML = `
-        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
-            <div style="background:rgba(102,126,234,.1);border-radius:12px;padding:20px;text-align:center">
-                <div style="font-size:28px;font-weight:800;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent">${total}</div>
-                <div style="font-size:11px;color:#888;margin-top:4px;text-transform:uppercase;letter-spacing:.5px">Total Clicks</div>
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+            <button onclick="analyticsDays=7;loadAnalyticsData()" class="btn-sec" style="flex:1;padding:8px;font-size:11px;margin:0;${analyticsDays===7?'background:#667eea;color:#fff;border-color:#667eea':''}">7d</button>
+            <button onclick="analyticsDays=30;loadAnalyticsData()" class="btn-sec" style="flex:1;padding:8px;font-size:11px;margin:0;${analyticsDays===30?'background:#667eea;color:#fff;border-color:#667eea':''}">30d</button>
+            <button onclick="analyticsDays=90;loadAnalyticsData()" class="btn-sec" style="flex:1;padding:8px;font-size:11px;margin:0;${analyticsDays===90?'background:#667eea;color:#fff;border-color:#667eea':''}">90d</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+            <div style="background:linear-gradient(135deg,rgba(102,126,234,.15),rgba(118,75,162,.15));border-radius:12px;padding:16px;text-align:center">
+                <div style="font-size:24px;font-weight:800;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent">${total}</div>
+                <div style="font-size:10px;color:#888;margin-top:2px">TOTAL</div>
             </div>
-            <div style="background:rgba(102,126,234,.1);border-radius:12px;padding:20px;text-align:center">
-                <div style="font-size:28px;font-weight:800;color:#667eea">${socialClicks}</div>
-                <div style="font-size:11px;color:#888;margin-top:4px;text-transform:uppercase;letter-spacing:.5px">Social</div>
+            <div style="background:rgba(102,126,234,.1);border-radius:12px;padding:16px;text-align:center">
+                <div style="font-size:24px;font-weight:800;color:#667eea">${socialClicks}</div>
+                <div style="font-size:10px;color:#888;margin-top:2px">SOCIAL</div>
             </div>
-            <div style="background:rgba(102,126,234,.1);border-radius:12px;padding:20px;text-align:center">
-                <div style="font-size:28px;font-weight:800;color:#764ba2">${featuredClicks}</div>
-                <div style="font-size:11px;color:#888;margin-top:4px;text-transform:uppercase;letter-spacing:.5px">Featured</div>
+            <div style="background:rgba(118,75,162,.1);border-radius:12px;padding:16px;text-align:center">
+                <div style="font-size:24px;font-weight:800;color:#764ba2">${featuredClicks}</div>
+                <div style="font-size:10px;color:#888;margin-top:2px">FEATURED</div>
             </div>
-            <div style="background:rgba(102,126,234,.1);border-radius:12px;padding:20px;text-align:center">
-                <div style="font-size:28px;font-weight:800;color:#ff9800">${carouselClicks}</div>
-                <div style="font-size:11px;color:#888;margin-top:4px;text-transform:uppercase;letter-spacing:.5px">Carousel</div>
+            <div style="background:rgba(255,152,0,.1);border-radius:12px;padding:16px;text-align:center">
+                <div style="font-size:24px;font-weight:800;color:#ff9800">${carouselClicks}</div>
+                <div style="font-size:10px;color:#888;margin-top:2px">CAROUSEL</div>
             </div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:16px">
-            <button onclick="analyticsDays=7;loadAnalyticsData()" class="btn-sec" style="flex:1;padding:8px;font-size:11px;margin:0;${analyticsDays===7?'background:#667eea;color:#fff;border-color:#667eea':''}">7 Days</button>
-            <button onclick="analyticsDays=30;loadAnalyticsData()" class="btn-sec" style="flex:1;padding:8px;font-size:11px;margin:0;${analyticsDays===30?'background:#667eea;color:#fff;border-color:#667eea':''}">30 Days</button>
-            <button onclick="analyticsDays=90;loadAnalyticsData()" class="btn-sec" style="flex:1;padding:8px;font-size:11px;margin:0;${analyticsDays===90?'background:#667eea;color:#fff;border-color:#667eea':''}">90 Days</button>
+        <div style="display:flex;align-items:flex-end;gap:3px;height:55px;padding:8px;background:rgba(255,255,255,.02);border-radius:8px">
+            ${chartBars || '<div style="color:#666;font-size:12px;margin:auto">No data</div>'}
         </div>
     `;
+}
+
+function renderCountries() {
+    const { byCountry } = analyticsData;
+    if (!byCountry || byCountry.length === 0) {
+        document.getElementById('countriesContent').innerHTML = `<div style="text-align:center;padding:20px;color:#666;font-size:13px">No country data yet</div>`;
+        return;
+    }
+
+    const total = byCountry.reduce((sum, c) => sum + parseInt(c.clicks), 0);
+    document.getElementById('countriesContent').innerHTML = byCountry.map(c => {
+        const pct = Math.round((parseInt(c.clicks) / total) * 100);
+        return `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(255,255,255,.03);border-radius:8px;margin-bottom:8px">
+            <div style="font-size:24px">${getFlag(c.country_code)}</div>
+            <div style="flex:1">
+                <div style="font-size:13px;font-weight:600;color:#ddd">${c.country || 'Unknown'}</div>
+                <div style="height:4px;background:rgba(255,255,255,.1);border-radius:2px;margin-top:4px;overflow:hidden">
+                    <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:2px"></div>
+                </div>
+            </div>
+            <div style="text-align:right">
+                <div style="font-size:14px;font-weight:700;color:#667eea">${c.clicks}</div>
+                <div style="font-size:10px;color:#888">${pct}%</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderDevices() {
+    const { byOS, byBrowser, byDevice } = analyticsData;
+
+    let html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">';
+
+    // OS
+    html += '<div><div style="font-size:10px;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Operating System</div>';
+    if (byOS && byOS.length > 0) {
+        html += byOS.slice(0, 4).map(o => `
+            <div style="display:flex;justify-content:space-between;padding:6px 8px;background:rgba(255,255,255,.03);border-radius:6px;margin-bottom:4px">
+                <span style="font-size:12px;color:#bbb">${o.os}</span>
+                <span style="font-size:12px;font-weight:600;color:#667eea">${o.clicks}</span>
+            </div>
+        `).join('');
+    } else {
+        html += '<div style="color:#666;font-size:11px">No data</div>';
+    }
+    html += '</div>';
+
+    // Browser
+    html += '<div><div style="font-size:10px;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Browser</div>';
+    if (byBrowser && byBrowser.length > 0) {
+        html += byBrowser.slice(0, 4).map(b => `
+            <div style="display:flex;justify-content:space-between;padding:6px 8px;background:rgba(255,255,255,.03);border-radius:6px;margin-bottom:4px">
+                <span style="font-size:12px;color:#bbb">${b.browser}</span>
+                <span style="font-size:12px;font-weight:600;color:#764ba2">${b.clicks}</span>
+            </div>
+        `).join('');
+    } else {
+        html += '<div style="color:#666;font-size:11px">No data</div>';
+    }
+    html += '</div>';
+
+    // Device
+    html += '<div><div style="font-size:10px;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Device</div>';
+    if (byDevice && byDevice.length > 0) {
+        html += byDevice.map(d => `
+            <div style="display:flex;justify-content:space-between;padding:6px 8px;background:rgba(255,255,255,.03);border-radius:6px;margin-bottom:4px">
+                <span style="font-size:12px;color:#bbb">${d.device === 'Mobile' ? '📱' : d.device === 'Tablet' ? '📱' : '💻'} ${d.device}</span>
+                <span style="font-size:12px;font-weight:600;color:#ff9800">${d.clicks}</span>
+            </div>
+        `).join('');
+    } else {
+        html += '<div style="color:#666;font-size:11px">No data</div>';
+    }
+    html += '</div></div>';
+
+    document.getElementById('devicesContent').innerHTML = html;
 }
 
 function renderTopLinks() {
@@ -865,39 +980,36 @@ function renderTopLinks() {
         return;
     }
 
-    document.getElementById('topLinksContent').innerHTML = topLinks.map(link => `
-        <div style="display:flex;align-items:center;gap:12px;padding:10px;background:rgba(255,255,255,.03);border-radius:8px;margin-bottom:8px">
+    document.getElementById('topLinksContent').innerHTML = topLinks.slice(0, 5).map((link, i) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(255,255,255,.03);border-radius:8px;margin-bottom:8px">
+            <div style="width:24px;height:24px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff">${i + 1}</div>
             <div style="flex:1;min-width:0">
                 <div style="font-size:13px;font-weight:600;color:#ddd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${link.link_title || 'Untitled'}</div>
-                <div style="font-size:10px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${link.link_url || ''}</div>
             </div>
-            <div style="background:${link.link_type==='social'?'rgba(102,126,234,.2)':link.link_type==='featured'?'rgba(118,75,162,.2)':'rgba(255,152,0,.2)'};color:${link.link_type==='social'?'#667eea':link.link_type==='featured'?'#764ba2':'#ff9800'};padding:4px 8px;border-radius:6px;font-size:10px;font-weight:600;text-transform:uppercase">${link.link_type}</div>
-            <div style="font-weight:700;color:#667eea;min-width:40px;text-align:right">${link.clicks}</div>
+            <div style="font-weight:700;color:#667eea">${link.clicks}</div>
         </div>
     `).join('');
 }
 
-function renderRecentActivity() {
-    const { daily } = analyticsData;
-    if (!daily || daily.length === 0) {
-        document.getElementById('recentActivityContent').innerHTML = `<div style="text-align:center;padding:20px;color:#666;font-size:13px">No activity yet</div>`;
+function renderRecentClicks() {
+    const { recent } = analyticsData;
+    if (!recent || recent.length === 0) {
+        document.getElementById('recentClicksContent').innerHTML = `<div style="text-align:center;padding:20px;color:#666;font-size:13px">No recent clicks</div>`;
         return;
     }
 
-    const maxClicks = Math.max(...daily.map(d => parseInt(d.clicks)));
-    document.getElementById('recentActivityContent').innerHTML = `
-        <div style="display:flex;align-items:flex-end;gap:4px;height:100px;padding-bottom:20px">
-            ${daily.slice().reverse().slice(0, 14).map(d => {
-                const height = Math.max(10, (parseInt(d.clicks) / maxClicks) * 100);
-                const date = new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                return `<div style="flex:1;display:flex;flex-direction:column;align-items:center">
-                    <div style="font-size:9px;color:#667eea;margin-bottom:4px">${d.clicks}</div>
-                    <div style="width:100%;height:${height}px;background:linear-gradient(to top,#667eea,#764ba2);border-radius:4px 4px 0 0"></div>
-                    <div style="font-size:8px;color:#666;margin-top:4px;transform:rotate(-45deg);white-space:nowrap">${date}</div>
-                </div>`;
-            }).join('')}
-        </div>
-    `;
+    document.getElementById('recentClicksContent').innerHTML = recent.slice(0, 10).map(r => {
+        const time = new Date(r.clicked_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px;background:rgba(255,255,255,.02);border-radius:6px;margin-bottom:6px;font-size:12px">
+            <div style="font-size:18px">${getFlag(r.country_code)}</div>
+            <div style="flex:1;min-width:0">
+                <div style="color:#ddd;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.link_title || 'Link'}</div>
+                <div style="color:#666;font-size:10px">${r.os || ''} · ${r.browser || ''}</div>
+            </div>
+            <div style="color:#888;font-size:10px;text-align:right;white-space:nowrap">${time}</div>
+        </div>`;
+    }).join('');
 }
 
 // === INIT ===

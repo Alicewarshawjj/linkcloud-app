@@ -50,7 +50,12 @@ async function initDB() {
         link_title TEXT,
         user_agent TEXT,
         ip_address VARCHAR(45),
-        country VARCHAR(2),
+        country VARCHAR(100),
+        country_code VARCHAR(5),
+        city VARCHAR(100),
+        os VARCHAR(50),
+        browser VARCHAR(50),
+        device VARCHAR(20),
         referrer TEXT,
         clicked_at TIMESTAMP DEFAULT NOW()
       );
@@ -58,6 +63,17 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_analytics_slug ON analytics(slug);
       CREATE INDEX IF NOT EXISTS idx_analytics_clicked_at ON analytics(clicked_at DESC);
       CREATE INDEX IF NOT EXISTS idx_analytics_link_type ON analytics(link_type);
+      CREATE INDEX IF NOT EXISTS idx_analytics_country ON analytics(country_code);
+
+      -- Add new columns if they don't exist (migration for existing databases)
+      DO $$ BEGIN
+        ALTER TABLE analytics ADD COLUMN IF NOT EXISTS country_code VARCHAR(5);
+        ALTER TABLE analytics ADD COLUMN IF NOT EXISTS city VARCHAR(100);
+        ALTER TABLE analytics ADD COLUMN IF NOT EXISTS os VARCHAR(50);
+        ALTER TABLE analytics ADD COLUMN IF NOT EXISTS browser VARCHAR(50);
+        ALTER TABLE analytics ADD COLUMN IF NOT EXISTS device VARCHAR(20);
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
     `);
 
     // Create default admin user if not exists
@@ -227,6 +243,54 @@ function getRequestFingerprint(req) {
   return crypto.createHash('sha256').update(data).digest('hex').slice(0, 16);
 }
 
+// ═══ DEVICE & LOCATION DETECTION ═══
+function parseUserAgent(ua) {
+  if (!ua) return { os: 'Unknown', browser: 'Unknown', device: 'Unknown' };
+
+  let os = 'Unknown';
+  let browser = 'Unknown';
+  let device = 'Desktop';
+
+  // OS Detection
+  if (/iPhone|iPad|iPod/.test(ua)) { os = 'iOS'; device = /iPad/.test(ua) ? 'Tablet' : 'Mobile'; }
+  else if (/Android/.test(ua)) { os = 'Android'; device = /Mobile/.test(ua) ? 'Mobile' : 'Tablet'; }
+  else if (/Windows/.test(ua)) os = 'Windows';
+  else if (/Mac OS X/.test(ua)) os = 'macOS';
+  else if (/Linux/.test(ua)) os = 'Linux';
+  else if (/CrOS/.test(ua)) os = 'Chrome OS';
+
+  // Browser Detection
+  if (/Instagram/.test(ua)) browser = 'Instagram';
+  else if (/FBAN|FBAV/.test(ua)) browser = 'Facebook';
+  else if (/Twitter/.test(ua)) browser = 'Twitter';
+  else if (/TikTok/.test(ua)) browser = 'TikTok';
+  else if (/Edg/.test(ua)) browser = 'Edge';
+  else if (/Chrome/.test(ua)) browser = 'Chrome';
+  else if (/Safari/.test(ua) && !/Chrome/.test(ua)) browser = 'Safari';
+  else if (/Firefox/.test(ua)) browser = 'Firefox';
+  else if (/Opera|OPR/.test(ua)) browser = 'Opera';
+
+  return { os, browser, device };
+}
+
+// Free IP Geolocation using ip-api.com (no API key needed, 45 req/min limit)
+async function getCountryFromIP(ip) {
+  if (!ip || ip === '::1' || ip === '127.0.0.1' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
+    return { country: 'Local', countryCode: 'XX', city: 'Local' };
+  }
+
+  try {
+    const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,city`);
+    const data = await response.json();
+    if (data.status === 'success') {
+      return { country: data.country, countryCode: data.countryCode, city: data.city || '' };
+    }
+  } catch (e) {
+    console.error('Geolocation error:', e.message);
+  }
+  return { country: 'Unknown', countryCode: 'XX', city: '' };
+}
+
 // ═══ LINK ENCODING (Simple & Reliable) ═══
 // Base64 with salt - simple but effective for hiding from crawlers
 
@@ -341,13 +405,19 @@ app.post('/api/analytics/click', async (req, res) => {
   try {
     const { link_type, link_id, link_url, link_title } = req.body;
     const user_agent = req.headers['user-agent'] || '';
-    const ip_address = req.headers['x-forwarded-for']?.split(',')[0] || req.ip || '';
+    const ip_address = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '';
     const referrer = req.headers.referer || '';
 
+    // Parse device info
+    const deviceInfo = parseUserAgent(user_agent);
+
+    // Get country (async, but don't block response)
+    const geoInfo = await getCountryFromIP(ip_address);
+
     await pool.query(
-      `INSERT INTO analytics (slug, link_type, link_id, link_url, link_title, user_agent, ip_address, referrer)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      ['main', link_type, link_id, link_url, link_title, user_agent, ip_address, referrer]
+      `INSERT INTO analytics (slug, link_type, link_id, link_url, link_title, user_agent, ip_address, country, country_code, city, os, browser, device, referrer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+      ['main', link_type, link_id, link_url, link_title, user_agent, ip_address, geoInfo.country, geoInfo.countryCode, geoInfo.city, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
     );
 
     res.json({ ok: true });
@@ -360,17 +430,18 @@ app.post('/api/analytics/click', async (req, res) => {
 app.get('/api/analytics/stats', requireAuth, async (req, res) => {
   try {
     const { days = 30 } = req.query;
+    const d = parseInt(days);
 
     // Total clicks
     const totalResult = await pool.query(
-      `SELECT COUNT(*) as total FROM analytics WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${parseInt(days)} days'`
+      `SELECT COUNT(*) as total FROM analytics WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${d} days'`
     );
 
     // Clicks by link type
     const byTypeResult = await pool.query(
       `SELECT link_type, COUNT(*) as clicks
        FROM analytics
-       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${parseInt(days)} days'
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${d} days'
        GROUP BY link_type
        ORDER BY clicks DESC`
     );
@@ -379,7 +450,7 @@ app.get('/api/analytics/stats', requireAuth, async (req, res) => {
     const topLinksResult = await pool.query(
       `SELECT link_type, link_title, link_url, COUNT(*) as clicks
        FROM analytics
-       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${parseInt(days)} days'
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${d} days'
        GROUP BY link_type, link_title, link_url
        ORDER BY clicks DESC
        LIMIT 10`
@@ -389,16 +460,67 @@ app.get('/api/analytics/stats', requireAuth, async (req, res) => {
     const dailyResult = await pool.query(
       `SELECT DATE(clicked_at) as date, COUNT(*) as clicks
        FROM analytics
-       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${parseInt(days)} days'
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${d} days'
        GROUP BY DATE(clicked_at)
        ORDER BY date DESC`
+    );
+
+    // By Country
+    const byCountryResult = await pool.query(
+      `SELECT country, country_code, COUNT(*) as clicks
+       FROM analytics
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${d} days' AND country IS NOT NULL AND country != ''
+       GROUP BY country, country_code
+       ORDER BY clicks DESC
+       LIMIT 10`
+    );
+
+    // By OS
+    const byOSResult = await pool.query(
+      `SELECT os, COUNT(*) as clicks
+       FROM analytics
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${d} days' AND os IS NOT NULL AND os != ''
+       GROUP BY os
+       ORDER BY clicks DESC`
+    );
+
+    // By Browser
+    const byBrowserResult = await pool.query(
+      `SELECT browser, COUNT(*) as clicks
+       FROM analytics
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${d} days' AND browser IS NOT NULL AND browser != ''
+       GROUP BY browser
+       ORDER BY clicks DESC`
+    );
+
+    // By Device
+    const byDeviceResult = await pool.query(
+      `SELECT device, COUNT(*) as clicks
+       FROM analytics
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${d} days' AND device IS NOT NULL AND device != ''
+       GROUP BY device
+       ORDER BY clicks DESC`
+    );
+
+    // Recent clicks (last 20)
+    const recentResult = await pool.query(
+      `SELECT link_title, link_type, country, country_code, os, browser, device, clicked_at
+       FROM analytics
+       WHERE slug = 'main'
+       ORDER BY clicked_at DESC
+       LIMIT 20`
     );
 
     res.json({
       total: parseInt(totalResult.rows[0]?.total || 0),
       byType: byTypeResult.rows,
       topLinks: topLinksResult.rows,
-      daily: dailyResult.rows
+      daily: dailyResult.rows,
+      byCountry: byCountryResult.rows,
+      byOS: byOSResult.rows,
+      byBrowser: byBrowserResult.rows,
+      byDevice: byDeviceResult.rows,
+      recent: recentResult.rows
     });
   } catch (e) {
     console.error('Get stats error:', e);
