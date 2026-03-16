@@ -456,7 +456,7 @@ async function checkAuth() {
 // === LOAD CONTENT ===
 async function loadContent() {
     try {
-        const res = await fetch('/api/content');
+        const res = await fetch('/api/content', { credentials: 'same-origin' });
         const data = await res.json();
         if (!data || !data.profile) {
             document.getElementById('fName').value = 'Your Name';
@@ -538,6 +538,7 @@ async function saveContent() {
         const res = await fetch('/api/content', {
             method: 'PUT',
             headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin', // Ensure auth cookie is sent
             body: JSON.stringify(content)
         });
         const data = await res.json();

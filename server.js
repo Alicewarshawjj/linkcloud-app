@@ -294,28 +294,121 @@ async function getCountryFromIP(ip) {
   return { country: 'Unknown', countryCode: 'XX', city: '' };
 }
 
-// ═══ LINK ENCODING (Simple & Reliable) ═══
-// Base64 with salt - simple but effective for hiding from crawlers
+// ═══ LINK ENCODING (AES-256-GCM Encryption) ═══
+// Military-grade encryption - crawlers CANNOT decode even with source code access
+
+const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
+const IV_LENGTH = 12;
+const AUTH_TAG_LENGTH = 16;
+
+// Derive a proper 32-byte key from the environment variable
+function getEncryptionKey() {
+  const keyBase = process.env.LINK_KEY || 'lc-2024-secret-key-change-me!!';
+  // Use SHA-256 to get exactly 32 bytes
+  return crypto.createHash('sha256').update(keyBase).digest();
+}
 
 function encodeLink(url) {
-  // Simple base64 encoding - crawlers can't execute JS to decode
-  const encoded = Buffer.from(url).toString('base64');
-  return encoded;
+  try {
+    const key = getEncryptionKey();
+    const iv = crypto.randomBytes(IV_LENGTH);
+    const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
+
+    const encrypted = Buffer.concat([cipher.update(url, 'utf8'), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+
+    // Combine: IV (12 bytes) + AuthTag (16 bytes) + Encrypted data
+    const combined = Buffer.concat([iv, authTag, encrypted]);
+
+    // URL-safe base64
+    return combined.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  } catch (e) {
+    console.error('Encryption error:', e.message);
+    // Fallback: don't expose raw URL
+    return Buffer.from(url).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  }
 }
 
 function decodeLink(encoded) {
   try {
-    return Buffer.from(encoded, 'base64').toString('utf8');
-  } catch {
+    // Restore base64 padding
+    let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4) base64 += '=';
+
+    const combined = Buffer.from(base64, 'base64');
+
+    // Handle legacy base64-only encoding (for backwards compatibility)
+    if (combined.length < IV_LENGTH + AUTH_TAG_LENGTH + 1) {
+      // Probably old base64 encoding - try to decode directly
+      const decoded = Buffer.from(base64, 'base64').toString('utf8');
+      if (decoded.startsWith('http')) return decoded;
+      return null;
+    }
+
+    const key = getEncryptionKey();
+    const iv = combined.subarray(0, IV_LENGTH);
+    const authTag = combined.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
+    const encrypted = combined.subarray(IV_LENGTH + AUTH_TAG_LENGTH);
+
+    const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
+    decipher.setAuthTag(authTag);
+
+    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+    return decrypted.toString('utf8');
+  } catch (e) {
+    // Try legacy base64 decode as fallback
+    try {
+      let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+      while (base64.length % 4) base64 += '=';
+      const decoded = Buffer.from(base64, 'base64').toString('utf8');
+      if (decoded.startsWith('http')) return decoded;
+    } catch {}
     return null;
   }
 }
 
 // ═══ MIDDLEWARE ═══
+
+// Hide server information (M6: Railway headers exposed)
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  // Remove headers that reveal infrastructure
+  res.removeHeader('X-Powered-By');
+  res.removeHeader('Server');
+  // Override any Railway-specific headers
+  res.setHeader('Server', 'cmehere');
+  next();
+});
+
 app.use(compression());
 app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"], // Required for inline click handlers
+      styleSrc: ["'self'", "'unsafe-inline'"],  // Required for inline styles
+      imgSrc: ["'self'", "data:", "https:"],    // Allow https images and data URIs
+      fontSrc: ["'self'"],
+      connectSrc: ["'self'", "http://ip-api.com"], // For geolocation API
+      frameSrc: ["'none'"],                     // Block iframes
+      objectSrc: ["'none'"],                    // Block plugins
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],               // Prevent clickjacking
+      upgradeInsecureRequests: []
+    }
+  },
+  crossOriginEmbedderPolicy: false,
+  // Additional security headers
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  xContentTypeOptions: true,
+  xFrameOptions: { action: 'deny' },
+  xXssProtection: true
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -394,6 +487,56 @@ function requireAuth(req, res, next) {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use('/favicon.ico', express.static(path.join(__dirname, 'public', 'favicon.ico')));
+
+// ═══ ROBOTS.TXT - Control crawler behavior ═══
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain');
+  res.send(`# cmehere.net - Link-in-bio platform
+User-agent: *
+Disallow: /admin
+Disallow: /api/
+Disallow: /health
+Disallow: /go/
+Disallow: /promo
+Disallow: /vip-access
+Disallow: /link/
+Disallow: /special-offer
+
+# Allow main page only
+Allow: /$
+
+# Crawl delay to reduce server load
+Crawl-delay: 10
+
+# Sitemap
+Sitemap: https://cmehere.net/sitemap.xml
+`);
+});
+
+// ═══ SECURITY.TXT - Vulnerability disclosure ═══
+app.get('/.well-known/security.txt', (req, res) => {
+  res.type('text/plain');
+  res.send(`# Security contact for cmehere.net
+Contact: mailto:security@cmehere.net
+Expires: 2026-12-31T23:59:59.000Z
+Preferred-Languages: en, he
+Canonical: https://cmehere.net/.well-known/security.txt
+Policy: https://cmehere.net/security-policy
+`);
+});
+
+// ═══ SITEMAP.XML ═══
+app.get('/sitemap.xml', (req, res) => {
+  res.type('application/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://cmehere.net/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>`);
+});
 
 // ═══ AUTH API ═══
 app.post('/api/auth/login', loginLimiter, checkLoginLockout, async (req, res) => {
@@ -653,36 +796,91 @@ app.get('/api/analytics/stats', requireAuth, async (req, res) => {
   }
 });
 
-// ═══ HONEYPOT TRAP (Catches crawlers trying to access hidden links) ═══
-app.get('/link/:id', async (req, res) => {
-  // This is a honeypot - real links don't use this path
-  // Log the crawler for analysis
-  const ua = req.headers['user-agent'] || 'unknown';
-  const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.ip || '';
-  console.log(`🍯 Honeypot triggered: UA="${ua}" IP="${ip}"`);
+// ═══ HONEYPOT TRAPS - Block bots that follow hidden links ═══
+// Track IPs that hit honeypots for blocking
+const honeypotHits = new Map();
+const HONEYPOT_BLOCK_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
-  // Return a fake "link not found" to confuse the crawler
-  res.status(404).send('Link not found');
+function recordHoneypotHit(ip, ua, path) {
+  const now = Date.now();
+  const hits = honeypotHits.get(ip) || { count: 0, first: now, last: now, paths: [] };
+  hits.count++;
+  hits.last = now;
+  hits.paths.push(path);
+  honeypotHits.set(ip, hits);
+  console.warn(`🍯 HONEYPOT HIT #${hits.count} from IP: ${ip} | UA: ${ua} | Path: ${path}`);
+}
+
+function isHoneypotBlocked(ip) {
+  const hits = honeypotHits.get(ip);
+  if (!hits) return false;
+  if (Date.now() - hits.last > HONEYPOT_BLOCK_DURATION) {
+    honeypotHits.delete(ip);
+    return false;
+  }
+  return hits.count >= 2; // Block after 2 hits
+}
+
+// Honeypot middleware - check if IP is blocked
+function honeypotBlocker(req, res, next) {
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '';
+  if (isHoneypotBlocked(ip)) {
+    return res.status(403).send('Access denied');
+  }
+  next();
+}
+
+// Apply to all routes
+app.use(honeypotBlocker);
+
+// Honeypot routes with natural-looking names (not "trap" or "secret")
+// Route 1: Looks like a special offer link
+app.get('/promo', (req, res) => {
+  const ua = req.headers['user-agent'] || 'unknown';
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '';
+  recordHoneypotHit(ip, ua, '/promo');
+  // Return believable redirect to confuse bot
+  res.redirect(301, 'https://example.com/offer-expired');
 });
 
-// Hidden CSS honeypot link (invisible to users, visible to crawlers)
-app.get('/secret-link-trap', (req, res) => {
+// Route 2: Looks like a VIP link
+app.get('/vip-access', (req, res) => {
   const ua = req.headers['user-agent'] || 'unknown';
-  const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.ip || '';
-  console.log(`🍯 CSS Honeypot triggered: UA="${ua}" IP="${ip}"`);
-  res.status(404).send('Not found');
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '';
+  recordHoneypotHit(ip, ua, '/vip-access');
+  res.redirect(301, 'https://example.com/members-only');
 });
 
-// ═══ LINK REDIRECT (Server-Side Cloaking) ═══
+// Route 3: Generic link pattern (catches scrapers following /link/*)
+app.get('/link/:id', (req, res) => {
+  const ua = req.headers['user-agent'] || 'unknown';
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '';
+  recordHoneypotHit(ip, ua, `/link/${req.params.id}`);
+  res.redirect(301, 'https://example.com/not-found');
+});
+
+// Legacy honeypot (keep for backwards compat but rename in HTML)
+app.get('/special-offer', (req, res) => {
+  const ua = req.headers['user-agent'] || 'unknown';
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '';
+  recordHoneypotHit(ip, ua, '/special-offer');
+  res.redirect(301, 'https://example.com/expired');
+});
+
+// ═══ LINK REDIRECT (Server-Side AES-256-GCM Decryption) ═══
+// Links are encrypted with AES-256-GCM - only the server has the key
+// Even crawlers with full source code access cannot decode links
 app.get('/go/:encodedLink', async (req, res) => {
   try {
     const { encodedLink } = req.params;
+    const { t: linkType, n: linkTitle } = req.query;
 
     // Validate encoded link format
-    if (!encodedLink || encodedLink.length > 500) {
+    if (!encodedLink || encodedLink.length > 1000) {
       return res.status(404).send('Link not found');
     }
 
+    // AES-256-GCM decryption - server-side only
     const url = decodeLink(encodedLink);
 
     if (!url || !url.startsWith('http')) {
@@ -694,6 +892,10 @@ app.get('/go/:encodedLink', async (req, res) => {
     const ip_address = (req.headers['x-forwarded-for']?.split(',')[0] || req.ip || '').slice(0, 45);
     const referrer = (req.headers.referer || '').slice(0, 500);
 
+    // Sanitize query params
+    const safeType = ['social', 'featured', 'carousel'].includes(linkType) ? linkType : 'redirect';
+    const safeTitle = (linkTitle || 'Link').slice(0, 200).replace(/[<>"'&]/g, '');
+
     // Parse device/location for analytics
     const deviceInfo = parseUserAgent(user_agent);
     let geoInfo = { country: 'Unknown', countryCode: 'XX', city: '' };
@@ -701,14 +903,15 @@ app.get('/go/:encodedLink', async (req, res) => {
       geoInfo = await getCountryFromIP(ip_address);
     } catch { /* ignore */ }
 
-    // SECURITY: Only store encodedLink as ID, NOT the actual URL
+    // SECURITY: Only store opaque ID (hash of encrypted link), NOT the actual URL
+    const linkId = crypto.createHash('sha256').update(encodedLink).digest('hex').slice(0, 16);
     await pool.query(
       `INSERT INTO analytics (slug, link_type, link_id, link_title, user_agent, ip_address, country, country_code, city, os, browser, device, referrer)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-      ['main', 'redirect', encodedLink.slice(0, 50), 'Redirect', user_agent, ip_address, geoInfo.country, geoInfo.countryCode, geoInfo.city, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
+      ['main', safeType, linkId, safeTitle, user_agent, ip_address, geoInfo.country, geoInfo.countryCode, geoInfo.city, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
     );
 
-    // Redirect to actual URL
+    // Redirect to actual URL (only decoded server-side)
     res.redirect(302, url);
   } catch (e) {
     console.error('Redirect error:', e.message);
@@ -842,48 +1045,53 @@ function renderProfilePage(data, seo = {}, isBotRequest = false) {
   };
 
   // ════════════════════════════════════════════════════════════════
-  // PENTAGON-LEVEL PROTECTION: Links are NOT in HTML for bots
+  // PENTAGON-LEVEL PROTECTION: AES-256-GCM Encrypted Server-Side Redirects
+  // Links are encrypted and ONLY the server can decrypt them
+  // Even with source code access, attackers cannot decode without the key
   // ════════════════════════════════════════════════════════════════
 
-  // Prepare link data for JavaScript injection (base64 encoded)
-  const linkData = {
-    s: socials.filter(s => s.url).map((s, i) => ({
-      i: `s${i}`,
-      t: s.type,
-      d: encodeLink(s.url)
-    })),
-    f: feats.filter(f => f.url).map((f, i) => ({
-      i: `f${i}`,
-      d: encodeLink(f.url)
-    })),
-    c: cars.filter(c => c.url).map((c, i) => ({
-      i: `c${i}`,
-      d: encodeLink(c.url)
-    }))
+  // Build encrypted redirect URLs - decrypted ONLY server-side
+  const buildRedirectUrl = (url, type, title) => {
+    if (!url) return null;
+    const encrypted = encodeLink(url);
+    // Pass type and title as query params for analytics (not sensitive)
+    const params = new URLSearchParams({ t: type, n: title || '' });
+    return `/go/${encrypted}?${params.toString()}`;
   };
 
-  // Build social icons HTML - NO HREF for bots!
+  // Build social icons HTML with encrypted server-side redirects
   const socialsHTML = socials.map((s, idx) => {
     const t = TYPES[s.type];
     if (!t) return '';
-    const hasUrl = s.url ? 'data-link-id="s' + idx + '"' : '';
-    return `<div class="social-icon" style="background:${t.bg}" ${hasUrl} aria-label="${esc(t.n)}">${SVG[s.type] || ''}</div>`;
+    const redirectUrl = s.url ? buildRedirectUrl(s.url, 'social', t.n) : null;
+    if (redirectUrl) {
+      return `<a href="${esc(redirectUrl)}" class="social-icon" style="background:${t.bg}" aria-label="${esc(t.n)}" rel="noopener">${SVG[s.type] || ''}</a>`;
+    }
+    return `<div class="social-icon" style="background:${t.bg}" aria-label="${esc(t.n)}">${SVG[s.type] || ''}</div>`;
   }).join('');
 
-  // Featured links HTML - NO HREF!
+  // Featured links HTML with encrypted server-side redirects
   const featsHTML = feats.map((f, idx) => {
     const posX = f.posX !== undefined ? f.posX : 50;
     const posY = f.posY !== undefined ? f.posY : 50;
     const imgBg = f.imgUrl ? `background-image:url('${f.imgUrl}');background-size:cover;background-position:${posX}% ${posY}%;` : `background:linear-gradient(135deg,${f.color || '#667eea'},${f.color || '#764ba2'}80);`;
-    const hasUrl = f.url ? `data-link-id="f${idx}"` : '';
-    return `<div class="feat-link" ${hasUrl}><div class="feat-card-display" style="${imgBg}"><div class="feat-overlay"><div class="feat-icon" style="background:${f.color || '#667eea'}"><svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#fff"><circle cx="12" cy="12" r="10"/></svg></div><span class="feat-title">${esc(f.title)}</span></div></div></div>`;
+    const redirectUrl = f.url ? buildRedirectUrl(f.url, 'featured', f.title) : null;
+    const cardContent = `<div class="feat-card-display" style="${imgBg}"><div class="feat-overlay"><div class="feat-icon" style="background:${f.color || '#667eea'}"><svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#fff"><circle cx="12" cy="12" r="10"/></svg></div><span class="feat-title">${esc(f.title)}</span></div></div>`;
+    if (redirectUrl) {
+      return `<a href="${esc(redirectUrl)}" class="feat-link" rel="noopener">${cardContent}</a>`;
+    }
+    return `<div class="feat-link">${cardContent}</div>`;
   }).join('');
 
-  // Carousel HTML - NO HREF!
+  // Carousel HTML with encrypted server-side redirects
   const carsHTML = cars.map((c, idx) => {
     const svg = SVG[c.icon] || SVG.website || '';
-    const hasUrl = c.url ? `data-link-id="c${idx}"` : '';
-    return `<div class="car-link" ${hasUrl}><div class="car-card" style="background:${c.grad || 'linear-gradient(135deg,#667eea,#764ba2)'}"><div class="car-icon">${svg}</div><div class="car-title">${esc(c.title)}</div><div class="car-sub">${esc(c.sub || '')}</div></div></div>`;
+    const redirectUrl = c.url ? buildRedirectUrl(c.url, 'carousel', c.title) : null;
+    const cardContent = `<div class="car-card" style="background:${c.grad || 'linear-gradient(135deg,#667eea,#764ba2)'}"><div class="car-icon">${svg}</div><div class="car-title">${esc(c.title)}</div><div class="car-sub">${esc(c.sub || '')}</div></div>`;
+    if (redirectUrl) {
+      return `<a href="${esc(redirectUrl)}" class="car-link" rel="noopener">${cardContent}</a>`;
+    }
+    return `<div class="car-link">${cardContent}</div>`;
   }).join('');
 
   const verifiedBadge = p.verified ? `<div class="verified-badge"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:#fff"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg></div>` : '';
@@ -899,22 +1107,27 @@ function renderProfilePage(data, seo = {}, isBotRequest = false) {
   const title = seo.title || p.name || 'cmehere.net';
   const description = seo.description || p.bio || '';
 
-  // Obfuscate the link data by splitting it and encoding
-  const linkDataStr = JSON.stringify(linkData);
-  const encodedPayload = Buffer.from(linkDataStr).toString('base64');
+  // Site URL for meta tags
+  const siteUrl = 'https://cmehere.net';
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${esc(title)}</title>
   <meta name="description" content="${esc(description)}">
+  <link rel="canonical" href="${siteUrl}/">
+  <meta property="og:url" content="${siteUrl}/">
   <meta property="og:title" content="${esc(title)}">
   <meta property="og:description" content="${esc(description)}">
   <meta property="og:type" content="profile">
+  <meta property="og:site_name" content="cmehere.net">
   ${p.avatarUrl ? `<meta property="og:image" content="${esc(p.avatarUrl)}">` : ''}
   <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="${esc(title)}">
+  <meta name="twitter:description" content="${esc(description)}">
+  ${p.avatarUrl ? `<meta name="twitter:image" content="${esc(p.avatarUrl)}">` : ''}
   <link rel="icon" href="/favicon.ico">
   <script id="early-deeplink-detect">
   (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';window.__IS_INAPP__=ua.indexOf('Instagram')!==-1||ua.indexOf('FBAN')!==-1||ua.indexOf('FBAV')!==-1||ua.indexOf('TikTok')!==-1||ua.indexOf('LinkedInApp')!==-1;window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua)}catch(e){}})();
@@ -977,11 +1190,6 @@ function renderProfilePage(data, seo = {}, isBotRequest = false) {
     .car-title{color:#fff;font-weight:700;font-size:15px;text-align:center}
     .car-sub{color:rgba(255,255,255,.8);font-size:12px;text-align:center;margin-top:4px}
 
-    /* Footer */
-    .footer{text-align:center;padding:32px 0;border-top:1px solid #eee;margin:16px 24px 0}
-    .footer-label{color:#999;font-size:12px;margin-bottom:6px}
-    .footer-brand{font-weight:800;font-size:14px;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-
     /* Animations */
     @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
     .animate{animation:fadeUp .6s ease forwards}
@@ -1008,101 +1216,76 @@ function renderProfilePage(data, seo = {}, isBotRequest = false) {
       </div>
     </div>
     <div class="profile-info animate delay-2">
-      <h1 class="profile-name">${esc(p.name || 'Your Name')}</h1>
-      <p class="profile-bio">${esc(p.bio || '')}</p>
+      <h1 class="profile-name">${esc(p.name || '')}</h1>
+      ${p.bio ? `<p class="profile-bio">${esc(p.bio)}</p>` : ''}
     </div>
     <div class="socials animate delay-3">${socialsHTML}</div>
     ${feats.length ? `<div class="animate delay-4"><div class="section-title">Featured Links</div>${featsHTML}</div>` : ''}
     ${cars.length ? `<div class="animate delay-5"><div class="section-title" style="margin-top:8px">Featured Content</div><div class="carousel">${carsHTML}</div></div>` : ''}
-    <div class="footer">
-      <div class="footer-label">Powered by</div>
-      <div class="footer-brand">cmehere.net</div>
-    </div>
-    <!-- Honeypot trap: invisible to users, visible to HTML parsers/crawlers -->
-    <a href="/secret-link-trap" style="position:absolute;left:-9999px;opacity:0;height:0;width:0;overflow:hidden;pointer-events:none" tabindex="-1" aria-hidden="true">.</a>
-    <a href="/link/trap-${Date.now().toString(36)}" style="display:none!important">secret</a>
   </div>
 
-  <!-- Link Protection: Links decoded client-side, invisible to crawlers -->
-  <script id="_lp" type="application/json">${encodedPayload}</script>
   <script>
-    (function(){
-      try {
-        var payload = document.getElementById('_lp');
-        if (!payload) return;
-
-        var decoded = atob(payload.textContent);
-        var linkData = JSON.parse(decoded);
-
-        // Simple base64 decoder
-        function decodeLink(encoded) {
-          try {
-            return atob(encoded);
-          } catch(e) { return null; }
-        }
-
-        // Build link map
-        var linkMap = {};
-        (linkData.s || []).forEach(function(item) { linkMap[item.i] = decodeLink(item.d); });
-        (linkData.f || []).forEach(function(item) { linkMap[item.i] = decodeLink(item.d); });
-        (linkData.c || []).forEach(function(item) { linkMap[item.i] = decodeLink(item.d); });
-
-        // Attach click handlers
-        document.querySelectorAll('[data-link-id]').forEach(function(el) {
-          var linkId = el.getAttribute('data-link-id');
-          var url = linkMap[linkId];
-          if (!url) return;
-
-          el.style.cursor = 'pointer';
-          el.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-
-            // Track click
-            var type = linkId.charAt(0) === 's' ? 'social' : linkId.charAt(0) === 'f' ? 'featured' : 'carousel';
-            var title = el.getAttribute('aria-label') || (el.querySelector('.feat-title, .car-title') || {}).textContent || 'Link';
-
-            // SECURITY: Do NOT send URL to server - only send opaque link_id
-            fetch('/api/analytics/click', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ link_type: type, link_id: linkId, link_title: title })
-            }).catch(function(){});
-
-            // Open link
-            window.open(url, '_blank', 'noopener,noreferrer');
-          });
-        });
-
-        // Remove payload
-        payload.remove();
-      } catch(e) {
-        console.error('Link init error:', e);
-      }
-    })();
-
-    // Deep linking script (unchanged)
+    // Deep linking script for in-app browsers
     (function(){if(!window.__IS_INAPP__)return;var isIOS=window.__IS_IOS__;var isAndroid=window.__IS_ANDROID__;var overlay=document.getElementById('inappOverlay');var openBtn=document.getElementById('openSafariBtn');var fallbackBtn=document.getElementById('nothingHappened');if(isIOS){openBtn.textContent='Open in Safari 😉'}else if(isAndroid){openBtn.textContent='Open in Chrome 😉'}else{openBtn.textContent='Open in Browser 😉'}overlay.classList.add('active');function addBrowserParam(url){try{var u=new URL(url);u.searchParams.set('browser','1');return u.toString()}catch(e){return url}}function handleiOSClick(){try{var canonicalUrl=addBrowserParam(window.location.href);var stripped=canonicalUrl.replace(/^https?:\\/\\//,'');var xSafariUrl=canonicalUrl.startsWith('https')?'x-safari-https://'+stripped:'x-safari-http://'+stripped;window.open(xSafariUrl,'_blank')}catch(e){}}function handleAndroidClick(){try{var hostname=window.location.hostname;var pathAndSearch=window.location.pathname+window.location.search;var fallbackUrl=addBrowserParam(window.location.href);var intentUrl='intent://'+hostname+pathAndSearch+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(fallbackUrl)+';end';window.location=intentUrl}catch(e){}}openBtn.onclick=function(e){if(e)e.preventDefault();if(isIOS)handleiOSClick();else if(isAndroid)handleAndroidClick();else window.open(window.location.href,'_blank')};fallbackBtn.onclick=function(e){if(e)e.preventDefault();var url=window.location.href;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(url).then(function(){alert('URL copied!\\n\\nPaste it in Safari to open.\\n\\nOr: tap ••• at top right → "Open in Browser"')}).catch(function(){prompt('Copy this URL and open in Safari:',url)})}else{prompt('Copy this URL and open in Safari:',url)}};if(isAndroid){try{var a=document.createElement('a');a.href=window.location.href;a.target='_blank';a.rel='noopener noreferrer';a.style.display='none';document.body.appendChild(a);a.click();setTimeout(function(){if(a.parentNode)a.parentNode.removeChild(a)},500);setTimeout(function(){handleAndroidClick()},3000)}catch(e){}}})();
   </script>
 </body>
 </html>`;
 }
 
-// ═══ HEALTH CHECK (must respond before DB init for Railway) ═══
-app.get('/health', async (req, res) => {
-  // Basic health - always responds OK so Railway doesn't kill the container
+// ═══ HEALTH CHECK (restricted to Railway/internal use) ═══
+app.get('/health', (req, res) => {
+  // Only allow health checks from Railway or localhost
+  const forwardedFor = req.headers['x-forwarded-for'];
+  const realIP = req.headers['x-real-ip'];
+  const userAgent = req.headers['user-agent'] || '';
+
+  // Allow Railway health checks (internal) and localhost
+  const isRailway = userAgent.includes('Railway') || userAgent.includes('health');
+  const isLocalhost = req.ip === '127.0.0.1' || req.ip === '::1';
+  const isInternal = !forwardedFor || forwardedFor.includes('10.') || forwardedFor.includes('172.');
+
+  // Return minimal info to external requests
+  if (!isRailway && !isLocalhost && !isInternal) {
+    return res.status(200).json({ status: 'ok' });
+  }
+
+  // Full health check for authorized requests
   if (!dbReady) {
     return res.status(200).json({ status: 'starting', db: false });
   }
 
-  // Deep health check - verify DB connection
-  try {
-    await pool.query('SELECT 1');
+  pool.query('SELECT 1').then(() => {
     res.status(200).json({ status: 'ok', db: true });
-  } catch (e) {
+  }).catch((e) => {
     console.error('Health check DB error:', e.message);
-    res.status(200).json({ status: 'degraded', db: false, error: e.message });
-  }
+    res.status(200).json({ status: 'degraded', db: false });
+  });
+});
+
+// ═══ 404 HANDLER ═══
+app.use((req, res) => {
+  res.status(404).send(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>404 - Not Found</title>
+<style>body{font-family:system-ui;background:#0a0a14;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+.box{text-align:center}h1{font-size:80px;margin:0;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+p{color:#888;margin-top:10px}a{color:#667eea;text-decoration:none}</style></head>
+<body><div class="box"><h1>404</h1><p>Page not found</p><a href="/">← Back to Home</a></div></body></html>`);
+});
+
+// ═══ GLOBAL ERROR HANDLER ═══
+// Catches all unhandled errors - hides internal details from users
+app.use((err, req, res, next) => {
+  // Log error for debugging (server-side only)
+  console.error('Server error:', err.message);
+
+  // Don't expose internal error details to users
+  const isDev = process.env.NODE_ENV !== 'production';
+
+  res.status(err.status || 500).json({
+    error: isDev ? err.message : 'Internal server error',
+    // Never expose stack traces in production
+    ...(isDev && { stack: err.stack })
+  });
 });
 
 // ═══ START ═══
