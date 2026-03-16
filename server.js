@@ -15,6 +15,9 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 const LINK_ENCRYPTION_KEY = process.env.LINK_KEY || 'lc-2024-secret-key-32ch';
 
+// Database ready flag (for graceful startup)
+let dbReady = false;
+
 // ═══ DATABASE ═══
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -585,6 +588,11 @@ app.get('/admin', (req, res) => {
 // ═══ PROFILE PAGE (Dynamic with Pentagon-Level Protection) ═══
 app.get('/', async (req, res) => {
   try {
+    // Check if DB is ready
+    if (!dbReady) {
+      return res.status(200).send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="2"><title>Loading...</title></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0a14;color:#fff;font-family:system-ui"><div style="text-align:center"><div style="font-size:48px;margin-bottom:16px">⏳</div><h1>Starting up...</h1><p style="color:#888">Please wait a moment</p></div></body></html>`);
+    }
+
     const result = await pool.query('SELECT content, seo FROM sites WHERE slug = $1', ['main']);
     if (result.rows.length === 0) return res.redirect('/admin');
     const data = result.rows[0].content;
@@ -881,12 +889,22 @@ function renderProfilePage(data, seo = {}, isBotRequest = false) {
 </html>`;
 }
 
+// ═══ HEALTH CHECK (must respond before DB init for Railway) ═══
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', db: dbReady });
+});
+
 // ═══ START ═══
-initDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`🚀 cmehere.net running on port ${PORT}`);
+// Start server immediately, then initialize DB
+app.listen(PORT, () => {
+  console.log(`🚀 cmehere.net starting on port ${PORT}`);
+
+  // Initialize DB after server is listening
+  initDB().then(() => {
+    dbReady = true;
+    console.log(`✅ Database ready, server fully operational`);
+  }).catch(err => {
+    console.error('Failed to initialize database:', err);
+    // Don't exit - let healthcheck still work but log the error
   });
-}).catch(err => {
-  console.error('Failed to initialize database:', err);
-  process.exit(1);
 });
