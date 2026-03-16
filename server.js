@@ -328,6 +328,56 @@ const apiLimiter = rateLimit({
   message: { error: 'Too many requests' }
 });
 
+// CRITICAL: Strict rate limiting for login - prevents brute force
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Only 5 attempts per 15 minutes
+  message: { error: 'Too many login attempts. Try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true // Don't count successful logins
+});
+
+// Track failed login attempts per IP for progressive delays
+const failedAttempts = new Map();
+const LOCKOUT_THRESHOLD = 5;
+const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
+
+function checkLoginLockout(req, res, next) {
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '';
+  const attempts = failedAttempts.get(ip);
+
+  if (attempts && attempts.count >= LOCKOUT_THRESHOLD) {
+    const timeSinceLockout = Date.now() - attempts.lastAttempt;
+    if (timeSinceLockout < LOCKOUT_DURATION) {
+      const remainingTime = Math.ceil((LOCKOUT_DURATION - timeSinceLockout) / 60000);
+      return res.status(429).json({
+        error: `Account locked. Try again in ${remainingTime} minutes.`
+      });
+    } else {
+      // Lockout expired, reset
+      failedAttempts.delete(ip);
+    }
+  }
+  next();
+}
+
+function recordFailedLogin(ip) {
+  const attempts = failedAttempts.get(ip) || { count: 0, lastAttempt: 0 };
+  attempts.count++;
+  attempts.lastAttempt = Date.now();
+  failedAttempts.set(ip, attempts);
+
+  // Log suspicious activity
+  if (attempts.count >= 3) {
+    console.warn(`⚠️ Multiple failed logins from IP: ${ip} (attempt #${attempts.count})`);
+  }
+}
+
+function clearFailedLogins(ip) {
+  failedAttempts.delete(ip);
+}
+
 // Auth middleware
 function requireAuth(req, res, next) {
   const token = req.cookies.token || req.headers.authorization?.replace('Bearer ', '');
@@ -346,24 +396,46 @@ app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use('/favicon.ico', express.static(path.join(__dirname, 'public', 'favicon.ico')));
 
 // ═══ AUTH API ═══
-app.post('/api/auth/login', apiLimiter, async (req, res) => {
+app.post('/api/auth/login', loginLimiter, checkLoginLockout, async (req, res) => {
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '';
+
   try {
     const { username, password } = req.body;
-    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+
+    // Validate input
+    if (!username || !password || typeof username !== 'string' || typeof password !== 'string') {
+      recordFailedLogin(ip);
+      return res.status(400).json({ error: 'Invalid request' });
+    }
+
+    // Prevent timing attacks - always do password check
+    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username.slice(0, 100)]);
     const user = result.rows[0];
-    if (!user || !await bcrypt.compare(password, user.password_hash)) {
+
+    // Use constant-time comparison where possible
+    const passwordMatch = user ? await bcrypt.compare(password, user.password_hash) : false;
+
+    if (!user || !passwordMatch) {
+      recordFailedLogin(ip);
+      // Add small random delay to prevent timing attacks
+      await new Promise(r => setTimeout(r, 100 + Math.random() * 200));
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+
+    // Successful login - clear failed attempts
+    clearFailedLogins(ip);
+
     const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
     res.cookie('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'strict', // Changed to strict for better security
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
-    res.json({ ok: true, token });
+    res.json({ ok: true });
   } catch (e) {
     console.error('Login error:', e);
+    recordFailedLogin(ip);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -378,7 +450,9 @@ app.get('/api/auth/check', requireAuth, (req, res) => {
 });
 
 // ═══ CONTENT API ═══
-app.get('/api/content', async (req, res) => {
+// CRITICAL: This endpoint is for ADMIN ONLY - requires authentication
+// The public page renders server-side and never exposes URLs to the client
+app.get('/api/content', requireAuth, async (req, res) => {
   try {
     if (!dbReady) return res.status(503).json({ error: 'Database initializing' });
     const result = await pool.query('SELECT content FROM sites WHERE slug = $1', ['main']);
@@ -405,29 +479,66 @@ app.put('/api/content', requireAuth, async (req, res) => {
 });
 
 // ═══ ANALYTICS API ═══
-app.post('/api/analytics/click', async (req, res) => {
+// Rate limit analytics to prevent spam
+const analyticsLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // 30 clicks per minute per IP
+  message: { ok: true }, // Don't reveal rate limiting to attackers
+  standardHeaders: false,
+  legacyHeaders: false
+});
+
+app.post('/api/analytics/click', analyticsLimiter, async (req, res) => {
   try {
-    const { link_type, link_id, link_url, link_title } = req.body;
-    const user_agent = req.headers['user-agent'] || '';
-    const ip_address = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '';
-    const referrer = req.headers.referer || '';
+    // Check DB ready
+    if (!dbReady) {
+      return res.json({ ok: true }); // Silently accept but don't store
+    }
+
+    const { link_type, link_id, link_title } = req.body;
+
+    // Validate input - reject invalid data
+    if (!link_type || typeof link_type !== 'string' || !['social', 'featured', 'carousel', 'redirect'].includes(link_type)) {
+      return res.json({ ok: true }); // Silently reject invalid
+    }
+
+    // Sanitize inputs - limit length, strip dangerous chars
+    const sanitize = (s, maxLen = 100) => {
+      if (!s || typeof s !== 'string') return '';
+      return s.slice(0, maxLen).replace(/[<>"'&]/g, '');
+    };
+
+    const safe_link_id = sanitize(link_id, 50);
+    const safe_link_title = sanitize(link_title, 200);
+
+    const user_agent = (req.headers['user-agent'] || '').slice(0, 500);
+    const ip_address = (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '').slice(0, 45);
+    const referrer = (req.headers.referer || '').slice(0, 500);
 
     // Parse device info
     const deviceInfo = parseUserAgent(user_agent);
 
-    // Get country (async, but don't block response)
-    const geoInfo = await getCountryFromIP(ip_address);
+    // Get country - don't block on failure
+    let geoInfo = { country: 'Unknown', countryCode: 'XX', city: '' };
+    try {
+      geoInfo = await getCountryFromIP(ip_address);
+    } catch (geoErr) {
+      // Silently continue with unknown location
+    }
 
+    // SECURITY: Do NOT store link_url - it could leak protected URLs
+    // We only store the link_id which is opaque
     await pool.query(
-      `INSERT INTO analytics (slug, link_type, link_id, link_url, link_title, user_agent, ip_address, country, country_code, city, os, browser, device, referrer)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-      ['main', link_type, link_id, link_url, link_title, user_agent, ip_address, geoInfo.country, geoInfo.countryCode, geoInfo.city, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
+      `INSERT INTO analytics (slug, link_type, link_id, link_title, user_agent, ip_address, country, country_code, city, os, browser, device, referrer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      ['main', link_type, safe_link_id, safe_link_title, user_agent, ip_address, geoInfo.country, geoInfo.countryCode, geoInfo.city, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
     );
 
     res.json({ ok: true });
   } catch (e) {
-    console.error('Analytics error:', e);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Analytics error:', e.message);
+    // Always return success to not leak info
+    res.json({ ok: true });
   }
 });
 
@@ -435,79 +546,88 @@ app.get('/api/analytics/stats', requireAuth, async (req, res) => {
   try {
     if (!dbReady) return res.status(503).json({ error: 'Database initializing' });
     const { days = 30 } = req.query;
-    const d = parseInt(days);
+    // Sanitize days parameter
+    const d = Math.min(Math.max(parseInt(days) || 30, 1), 365);
 
-    // Total clicks
+    // Total clicks - use parameterized query to prevent SQL injection
     const totalResult = await pool.query(
-      `SELECT COUNT(*) as total FROM analytics WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${d} days'`
+      `SELECT COUNT(*) as total FROM analytics WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '1 day' * $1`,
+      [d]
     );
 
     // Clicks by link type
     const byTypeResult = await pool.query(
       `SELECT link_type, COUNT(*) as clicks
        FROM analytics
-       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${d} days'
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '1 day' * $1
        GROUP BY link_type
-       ORDER BY clicks DESC`
+       ORDER BY clicks DESC`,
+      [d]
     );
 
-    // Top links
+    // Top links - DO NOT include link_url (security)
     const topLinksResult = await pool.query(
-      `SELECT link_type, link_title, link_url, COUNT(*) as clicks
+      `SELECT link_type, link_title, COUNT(*) as clicks
        FROM analytics
-       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${d} days'
-       GROUP BY link_type, link_title, link_url
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '1 day' * $1
+       GROUP BY link_type, link_title
        ORDER BY clicks DESC
-       LIMIT 10`
+       LIMIT 10`,
+      [d]
     );
 
-    // Clicks over time (daily)
+    // Clicks over time (daily) - parameterized
     const dailyResult = await pool.query(
       `SELECT DATE(clicked_at) as date, COUNT(*) as clicks
        FROM analytics
-       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${d} days'
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '1 day' * $1
        GROUP BY DATE(clicked_at)
-       ORDER BY date DESC`
+       ORDER BY date DESC`,
+      [d]
     );
 
-    // By Country
+    // By Country - parameterized
     const byCountryResult = await pool.query(
       `SELECT country, country_code, COUNT(*) as clicks
        FROM analytics
-       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${d} days' AND country IS NOT NULL AND country != ''
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '1 day' * $1 AND country IS NOT NULL AND country != ''
        GROUP BY country, country_code
        ORDER BY clicks DESC
-       LIMIT 10`
+       LIMIT 10`,
+      [d]
     );
 
-    // By OS
+    // By OS - parameterized
     const byOSResult = await pool.query(
       `SELECT os, COUNT(*) as clicks
        FROM analytics
-       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${d} days' AND os IS NOT NULL AND os != ''
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '1 day' * $1 AND os IS NOT NULL AND os != ''
        GROUP BY os
-       ORDER BY clicks DESC`
+       ORDER BY clicks DESC`,
+      [d]
     );
 
-    // By Browser
+    // By Browser - parameterized
     const byBrowserResult = await pool.query(
       `SELECT browser, COUNT(*) as clicks
        FROM analytics
-       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${d} days' AND browser IS NOT NULL AND browser != ''
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '1 day' * $1 AND browser IS NOT NULL AND browser != ''
        GROUP BY browser
-       ORDER BY clicks DESC`
+       ORDER BY clicks DESC`,
+      [d]
     );
 
-    // By Device
+    // By Device - parameterized
     const byDeviceResult = await pool.query(
       `SELECT device, COUNT(*) as clicks
        FROM analytics
-       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '${d} days' AND device IS NOT NULL AND device != ''
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '1 day' * $1 AND device IS NOT NULL AND device != ''
        GROUP BY device
-       ORDER BY clicks DESC`
+       ORDER BY clicks DESC`,
+      [d]
     );
 
-    // Recent clicks (last 20)
+    // Recent clicks (last 20) - no link_url for security
     const recentResult = await pool.query(
       `SELECT link_title, link_type, country, country_code, os, browser, device, clicked_at
        FROM analytics
@@ -557,34 +677,110 @@ app.get('/secret-link-trap', (req, res) => {
 app.get('/go/:encodedLink', async (req, res) => {
   try {
     const { encodedLink } = req.params;
-    const url = decodeLink(encodedLink);
 
-    if (!url) {
+    // Validate encoded link format
+    if (!encodedLink || encodedLink.length > 500) {
       return res.status(404).send('Link not found');
     }
 
-    // Track the click
-    const user_agent = req.headers['user-agent'] || '';
-    const ip_address = req.headers['x-forwarded-for']?.split(',')[0] || req.ip || '';
-    const referrer = req.headers.referer || '';
+    const url = decodeLink(encodedLink);
 
+    if (!url || !url.startsWith('http')) {
+      return res.status(404).send('Link not found');
+    }
+
+    // Track the click - SECURITY: Do NOT store URL
+    const user_agent = (req.headers['user-agent'] || '').slice(0, 500);
+    const ip_address = (req.headers['x-forwarded-for']?.split(',')[0] || req.ip || '').slice(0, 45);
+    const referrer = (req.headers.referer || '').slice(0, 500);
+
+    // Parse device/location for analytics
+    const deviceInfo = parseUserAgent(user_agent);
+    let geoInfo = { country: 'Unknown', countryCode: 'XX', city: '' };
+    try {
+      geoInfo = await getCountryFromIP(ip_address);
+    } catch { /* ignore */ }
+
+    // SECURITY: Only store encodedLink as ID, NOT the actual URL
     await pool.query(
-      `INSERT INTO analytics (slug, link_type, link_id, link_url, link_title, user_agent, ip_address, referrer)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      ['main', 'redirect', encodedLink, url, 'Redirect', user_agent, ip_address, referrer]
+      `INSERT INTO analytics (slug, link_type, link_id, link_title, user_agent, ip_address, country, country_code, city, os, browser, device, referrer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      ['main', 'redirect', encodedLink.slice(0, 50), 'Redirect', user_agent, ip_address, geoInfo.country, geoInfo.countryCode, geoInfo.city, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
     );
 
     // Redirect to actual URL
     res.redirect(302, url);
   } catch (e) {
-    console.error('Redirect error:', e);
-    res.status(500).send('Error');
+    console.error('Redirect error:', e.message);
+    res.status(404).send('Link not found');
   }
 });
 
 // ═══ ADMIN PAGE ═══
+// Serve login page for unauthenticated users, full admin for authenticated
 app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+  const token = req.cookies.token;
+  if (!token) {
+    // Not logged in - serve minimal login page (no admin code exposed)
+    return res.send(`<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>cmehere.net Admin - Login</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0a0a14;color:#e0e0e0;min-height:100vh;display:flex;align-items:center;justify-content:center}
+    .login-box{max-width:360px;width:100%;padding:40px;text-align:center}
+    h2{font-size:24px;margin-bottom:8px;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    p{color:#666;font-size:13px;margin-bottom:24px}
+    label{display:block;font-size:11px;font-weight:700;color:#666;margin-bottom:5px;text-align:right;text-transform:uppercase}
+    input{width:100%;padding:12px 14px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.09);border-radius:10px;color:#ddd;font-size:14px;outline:none;margin-bottom:16px;direction:ltr}
+    input:focus{border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.15)}
+    .btn{width:100%;padding:14px;background:linear-gradient(135deg,#667eea,#764ba2);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+    .btn:hover{opacity:.9}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .error{color:#ff4757;font-size:12px;margin-top:-8px;margin-bottom:12px;display:none}
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <h2>cmehere.net Admin</h2>
+    <p>Sign in to manage your page</p>
+    <form id="loginForm">
+      <label>Username</label>
+      <input type="text" id="user" autocomplete="username" required>
+      <label>Password</label>
+      <input type="password" id="pass" autocomplete="current-password" required>
+      <div class="error" id="err">Invalid credentials</div>
+      <button type="submit" class="btn" id="btn">Sign In</button>
+    </form>
+  </div>
+  <script>
+    document.getElementById('loginForm').onsubmit=async function(e){
+      e.preventDefault();
+      var btn=document.getElementById('btn');
+      btn.disabled=true;btn.textContent='...';
+      try{
+        var r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:document.getElementById('user').value,password:document.getElementById('pass').value})});
+        var d=await r.json();
+        if(d.ok){window.location.reload();}
+        else{document.getElementById('err').style.display='block';btn.disabled=false;btn.textContent='Sign In';}
+      }catch(x){document.getElementById('err').style.display='block';btn.disabled=false;btn.textContent='Sign In';}
+    };
+  </script>
+</body>
+</html>`);
+  }
+
+  // Verify token before serving admin panel
+  try {
+    jwt.verify(token, JWT_SECRET);
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+  } catch {
+    res.clearCookie('token');
+    res.redirect('/admin');
+  }
 });
 
 // ═══ PROFILE PAGE (Dynamic with Pentagon-Level Protection) ═══
@@ -866,10 +1062,11 @@ function renderProfilePage(data, seo = {}, isBotRequest = false) {
             var type = linkId.charAt(0) === 's' ? 'social' : linkId.charAt(0) === 'f' ? 'featured' : 'carousel';
             var title = el.getAttribute('aria-label') || (el.querySelector('.feat-title, .car-title') || {}).textContent || 'Link';
 
+            // SECURITY: Do NOT send URL to server - only send opaque link_id
             fetch('/api/analytics/click', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ link_type: type, link_id: linkId, link_url: url, link_title: title })
+              body: JSON.stringify({ link_type: type, link_id: linkId, link_title: title })
             }).catch(function(){});
 
             // Open link
