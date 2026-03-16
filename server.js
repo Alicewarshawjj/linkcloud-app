@@ -380,6 +380,7 @@ app.get('/api/auth/check', requireAuth, (req, res) => {
 // ═══ CONTENT API ═══
 app.get('/api/content', async (req, res) => {
   try {
+    if (!dbReady) return res.status(503).json({ error: 'Database initializing' });
     const result = await pool.query('SELECT content FROM sites WHERE slug = $1', ['main']);
     if (result.rows.length === 0) return res.json({});
     res.json(result.rows[0].content);
@@ -432,6 +433,7 @@ app.post('/api/analytics/click', async (req, res) => {
 
 app.get('/api/analytics/stats', requireAuth, async (req, res) => {
   try {
+    if (!dbReady) return res.status(503).json({ error: 'Database initializing' });
     const { days = 30 } = req.query;
     const d = parseInt(days);
 
@@ -890,8 +892,20 @@ function renderProfilePage(data, seo = {}, isBotRequest = false) {
 }
 
 // ═══ HEALTH CHECK (must respond before DB init for Railway) ═══
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', db: dbReady });
+app.get('/health', async (req, res) => {
+  // Basic health - always responds OK so Railway doesn't kill the container
+  if (!dbReady) {
+    return res.status(200).json({ status: 'starting', db: false });
+  }
+
+  // Deep health check - verify DB connection
+  try {
+    await pool.query('SELECT 1');
+    res.status(200).json({ status: 'ok', db: true });
+  } catch (e) {
+    console.error('Health check DB error:', e.message);
+    res.status(200).json({ status: 'degraded', db: false, error: e.message });
+  }
 });
 
 // ═══ START ═══
