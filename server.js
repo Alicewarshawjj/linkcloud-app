@@ -241,7 +241,9 @@ function renderProfilePage(data, seo = {}) {
 
   // Featured links HTML
   const featsHTML = feats.map(f => {
-    const imgBg = f.imgUrl ? `background-image:url('${f.imgUrl}');background-size:cover;background-position:center;` : `background:linear-gradient(135deg,${f.color || '#667eea'},${f.color || '#764ba2'}80);`;
+    const posX = f.posX !== undefined ? f.posX : 50;
+    const posY = f.posY !== undefined ? f.posY : 50;
+    const imgBg = f.imgUrl ? `background-image:url('${f.imgUrl}');background-size:cover;background-position:${posX}% ${posY}%;` : `background:linear-gradient(135deg,${f.color || '#667eea'},${f.color || '#764ba2'}80);`;
     const wrapper = f.url ? [`<a href="${esc(f.url)}" target="_blank" rel="noopener noreferrer" class="feat-link">`, '</a>'] : ['<div class="feat-link">', '</div>'];
     return `${wrapper[0]}<div class="feat-card-display" style="${imgBg}"><div class="feat-overlay"><div class="feat-icon" style="background:${f.color || '#667eea'}"><svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#fff"><circle cx="12" cy="12" r="10"/></svg></div><span class="feat-title">${esc(f.title)}</span></div></div>${wrapper[1]}`;
   }).join('');
@@ -255,8 +257,13 @@ function renderProfilePage(data, seo = {}) {
 
   const verifiedBadge = p.verified ? `<div class="verified-badge"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:#fff"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg></div>` : '';
 
-  const coverHTML = p.coverUrl ? `<img src="${esc(p.coverUrl)}" alt="Cover" class="cover-img">` : `<div class="cover-gradient"></div>`;
-  const avatarHTML = p.avatarUrl ? `<img src="${esc(p.avatarUrl)}" alt="${esc(p.name)}" class="avatar-img">` : `<div class="avatar-placeholder"></div>`;
+  const coverPosX = p.coverPosX !== undefined ? p.coverPosX : 50;
+  const coverPosY = p.coverPosY !== undefined ? p.coverPosY : 50;
+  const avatarPosX = p.avatarPosX !== undefined ? p.avatarPosX : 50;
+  const avatarPosY = p.avatarPosY !== undefined ? p.avatarPosY : 50;
+
+  const coverHTML = p.coverUrl ? `<img src="${esc(p.coverUrl)}" alt="Cover" class="cover-img" style="object-position:${coverPosX}% ${coverPosY}%">` : `<div class="cover-gradient"></div>`;
+  const avatarHTML = p.avatarUrl ? `<img src="${esc(p.avatarUrl)}" alt="${esc(p.name)}" class="avatar-img" style="object-position:${avatarPosX}% ${avatarPosY}%">` : `<div class="avatar-placeholder"></div>`;
 
   const title = seo.title || p.name || 'LinkCloud';
   const description = seo.description || p.bio || '';

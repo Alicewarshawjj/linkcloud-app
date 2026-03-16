@@ -40,13 +40,23 @@
         .upload-zone:hover,.upload-zone.dragover{border-color:#667eea;background:rgba(102,126,234,.06)}
         .upload-zone.has-image{border-style:solid;border-color:rgba(255,255,255,.08)}
         .upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}
-        .upload-zone img{width:100%;height:100%;object-fit:cover;display:block}
+        .upload-zone img{width:100%;height:100%;object-fit:cover;display:block;object-position:50% 50%}
         .upload-zone .placeholder{text-align:center;padding:16px;color:#555;font-size:12px;line-height:1.5}
         .upload-zone .placeholder span{font-size:24px;display:block;margin-bottom:4px}
         .cover-upload{height:100px;border-radius:12px}
         .avatar-upload{width:80px;height:80px;border-radius:50%;margin:0 auto}
         .uploading{opacity:.5;pointer-events:none}
         .upload-progress{position:absolute;bottom:0;left:0;height:3px;background:linear-gradient(90deg,#667eea,#764ba2);transition:width .3s;z-index:5}
+
+        .position-controls{display:none;padding:8px 10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:8px;margin-top:8px}
+        .position-controls.show{display:block}
+        .position-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+        .position-row:last-child{margin-bottom:0}
+        .position-label{font-size:10px;color:#666;width:50px;flex-shrink:0}
+        .position-slider{flex:1;height:20px;-webkit-appearance:none;appearance:none;background:rgba(255,255,255,.05);border-radius:5px;outline:none}
+        .position-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:50%;cursor:pointer}
+        .position-slider::-moz-range-thumb{width:14px;height:14px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:50%;cursor:pointer;border:none}
+        .position-value{font-size:10px;color:#888;width:35px;text-align:right;flex-shrink:0}
 
         .item-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;margin-bottom:6px;transition:background .15s}
         .item-row:hover{background:rgba(255,255,255,.06)}
@@ -143,12 +153,36 @@
                 <input type="file" accept="image/*" onchange="uploadImage(this,'cover')">
                 <div class="upload-progress" id="coverProgress" style="width:0"></div>
             </div>
+            <div class="position-controls" id="coverPosition">
+                <div class="position-row">
+                    <span class="position-label">Horizontal</span>
+                    <input type="range" class="position-slider" id="coverX" min="0" max="100" value="50" oninput="updateImagePosition('cover')">
+                    <span class="position-value" id="coverXVal">50%</span>
+                </div>
+                <div class="position-row">
+                    <span class="position-label">Vertical</span>
+                    <input type="range" class="position-slider" id="coverY" min="0" max="100" value="50" oninput="updateImagePosition('cover')">
+                    <span class="position-value" id="coverYVal">50%</span>
+                </div>
+            </div>
             <label>Avatar</label>
             <div class="upload-zone avatar-upload" id="avatarZone">
                 <img id="avatarImg" style="display:none">
                 <div class="placeholder" id="avatarPlaceholder"><span>&#128247;</span>Drop</div>
                 <input type="file" accept="image/*" onchange="uploadImage(this,'avatar')">
                 <div class="upload-progress" id="avatarProgress" style="width:0"></div>
+            </div>
+            <div class="position-controls" id="avatarPosition">
+                <div class="position-row">
+                    <span class="position-label">Horizontal</span>
+                    <input type="range" class="position-slider" id="avatarX" min="0" max="100" value="50" oninput="updateImagePosition('avatar')">
+                    <span class="position-value" id="avatarXVal">50%</span>
+                </div>
+                <div class="position-row">
+                    <span class="position-label">Vertical</span>
+                    <input type="range" class="position-slider" id="avatarY" min="0" max="100" value="50" oninput="updateImagePosition('avatar')">
+                    <span class="position-value" id="avatarYVal">50%</span>
+                </div>
             </div>
             <label>Verified Badge</label>
             <select id="fVerified" onchange="markDirty()"><option value="yes">Show</option><option value="no">Hide</option></select>
@@ -299,12 +333,30 @@ async function loadContent() {
             ci.src = data.profile.coverUrl; ci.style.display = 'block';
             document.getElementById('coverPlaceholder').style.display = 'none';
             document.getElementById('coverZone').classList.add('has-image');
+            document.getElementById('coverPosition').classList.add('show');
+            // Load position
+            const posX = data.profile.coverPosX !== undefined ? data.profile.coverPosX : 50;
+            const posY = data.profile.coverPosY !== undefined ? data.profile.coverPosY : 50;
+            document.getElementById('coverX').value = posX;
+            document.getElementById('coverY').value = posY;
+            ci.style.objectPosition = posX + '% ' + posY + '%';
+            document.getElementById('coverXVal').textContent = posX + '%';
+            document.getElementById('coverYVal').textContent = posY + '%';
         }
         if (data.profile.avatarUrl) {
             const ai = document.getElementById('avatarImg');
             ai.src = data.profile.avatarUrl; ai.style.display = 'block';
             document.getElementById('avatarPlaceholder').style.display = 'none';
             document.getElementById('avatarZone').classList.add('has-image');
+            document.getElementById('avatarPosition').classList.add('show');
+            // Load position
+            const posX = data.profile.avatarPosX !== undefined ? data.profile.avatarPosX : 50;
+            const posY = data.profile.avatarPosY !== undefined ? data.profile.avatarPosY : 50;
+            document.getElementById('avatarX').value = posX;
+            document.getElementById('avatarY').value = posY;
+            ai.style.objectPosition = posX + '% ' + posY + '%';
+            document.getElementById('avatarXVal').textContent = posX + '%';
+            document.getElementById('avatarYVal').textContent = posY + '%';
         }
         socials = data.socials || [];
         feats = data.feats || [];
@@ -330,7 +382,11 @@ async function saveContent() {
                 bio: document.getElementById('fBio').value,
                 verified: document.getElementById('fVerified').value === 'yes',
                 coverUrl: document.getElementById('coverImg').src || '',
-                avatarUrl: document.getElementById('avatarImg').src || ''
+                avatarUrl: document.getElementById('avatarImg').src || '',
+                coverPosX: parseInt(document.getElementById('coverX').value) || 50,
+                coverPosY: parseInt(document.getElementById('coverY').value) || 50,
+                avatarPosX: parseInt(document.getElementById('avatarX').value) || 50,
+                avatarPosY: parseInt(document.getElementById('avatarY').value) || 50
             },
             socials: socials,
             feats: feats,
@@ -378,7 +434,7 @@ function resizeAndConvert(file, maxW, maxH) {
                 }
                 canvas.width = w; canvas.height = h;
                 canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                resolve(canvas.toDataURL('image/jpeg', 0.7));
+                resolve(canvas.toDataURL('image/jpeg', 0.92));
             };
             img.src = e.target.result;
         };
@@ -404,8 +460,21 @@ async function uploadImage(input, type) {
     zone.classList.add('has-image');
     zone.classList.remove('uploading');
     progress.style.width = '0';
+    // Show position controls
+    document.getElementById(type + 'Position').classList.add('show');
     markDirty();
     toast('Image ready!');
+}
+
+// Update image position with sliders
+function updateImagePosition(type) {
+    const x = document.getElementById(type + 'X').value;
+    const y = document.getElementById(type + 'Y').value;
+    const img = document.getElementById(type + 'Img');
+    img.style.objectPosition = x + '% ' + y + '%';
+    document.getElementById(type + 'XVal').textContent = x + '%';
+    document.getElementById(type + 'YVal').textContent = y + '%';
+    markDirty();
 }
 
 async function uploadFeatImage(input, idx) {
@@ -413,9 +482,25 @@ async function uploadFeatImage(input, idx) {
     if (!file) return;
     const dataUrl = await resizeAndConvert(file, 600, 300);
     feats[idx].imgUrl = dataUrl;
+    if (!feats[idx].posX) feats[idx].posX = 50;
+    if (!feats[idx].posY) feats[idx].posY = 50;
     renderFeats();
     markDirty();
     toast('Image ready!');
+}
+
+function updateFeatPosition(idx, x, y) {
+    feats[idx].posX = parseInt(x);
+    feats[idx].posY = parseInt(y);
+    const img = document.getElementById('featImg' + idx);
+    if (img) img.style.objectPosition = x + '% ' + y + '%';
+    // Update value displays
+    const controls = document.getElementById('featPosition' + idx);
+    if (controls) {
+        controls.querySelectorAll('.position-value')[0].textContent = x + '%';
+        controls.querySelectorAll('.position-value')[1].textContent = y + '%';
+    }
+    markDirty();
 }
 
 // === RENDER ===
@@ -441,12 +526,26 @@ function renderFeats() {
     const el = document.getElementById('featList');
     el.innerHTML = feats.map((f,i) => {
         const imgSrc = f.imgUrl || '';
+        const posX = f.posX !== undefined ? f.posX : 50;
+        const posY = f.posY !== undefined ? f.posY : 50;
         return `<div class="feat-card">
             <div class="feat-head"><span>${f.title||'Link '+(i+1)}</span><button class="del-btn" onclick="feats.splice(${i},1);renderFeats();markDirty()">&#10005;</button></div>
             <label>Card Image</label>
             <div class="upload-zone feat-img-upload ${imgSrc?'has-image':''}" id="featZone${i}">
-                ${imgSrc?`<img src="${imgSrc}">`:'<div class="placeholder"><span>&#128247;</span>Drop or click</div>'}
+                ${imgSrc?`<img src="${imgSrc}" style="object-position:${posX}% ${posY}%" id="featImg${i}">`:'<div class="placeholder"><span>&#128247;</span>Drop or click</div>'}
                 <input type="file" accept="image/*" onchange="uploadFeatImage(this,${i})">
+            </div>
+            <div class="position-controls ${imgSrc?'show':''}" id="featPosition${i}">
+                <div class="position-row">
+                    <span class="position-label">Horizontal</span>
+                    <input type="range" class="position-slider" min="0" max="100" value="${posX}" oninput="updateFeatPosition(${i},this.value,feats[${i}].posY||50)">
+                    <span class="position-value">${posX}%</span>
+                </div>
+                <div class="position-row">
+                    <span class="position-label">Vertical</span>
+                    <input type="range" class="position-slider" min="0" max="100" value="${posY}" oninput="updateFeatPosition(${i},feats[${i}].posX||50,this.value)">
+                    <span class="position-value">${posY}%</span>
+                </div>
             </div>
             <div class="row2">
                 <div><label>Title</label><input type="text" value="${esc(f.title)}" onchange="feats[${i}].title=this.value;renderFeats();markDirty()"></div>
