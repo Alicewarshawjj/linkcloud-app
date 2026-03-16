@@ -1,0 +1,401 @@
+require('dotenv').config();
+const express = require('express');
+const { Pool } = require('pg');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
+const compression = require('compression');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const path = require('path');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
+
+// ═══ DATABASE ═══
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
+
+async function initDB() {
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(100) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS sites (
+        id SERIAL PRIMARY KEY,
+        slug VARCHAR(100) UNIQUE NOT NULL DEFAULT 'main',
+        content JSONB NOT NULL DEFAULT '{}',
+        seo JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    // Create default admin user if not exists
+    const adminUser = process.env.ADMIN_USERNAME || 'admin';
+    const adminPass = process.env.ADMIN_PASSWORD || 'changeme123';
+    const existing = await client.query('SELECT id FROM users WHERE username = $1', [adminUser]);
+    if (existing.rows.length === 0) {
+      const hash = await bcrypt.hash(adminPass, 12);
+      await client.query('INSERT INTO users (username, password_hash) VALUES ($1, $2)', [adminUser, hash]);
+      console.log(`✅ Admin user created: ${adminUser}`);
+    }
+
+    // Create default site if not exists
+    const site = await client.query('SELECT id FROM sites WHERE slug = $1', ['main']);
+    if (site.rows.length === 0) {
+      const defaultContent = {
+        profile: {
+          name: 'Your Name',
+          bio: 'Your bio here',
+          verified: false,
+          coverUrl: '',
+          avatarUrl: ''
+        },
+        socials: [
+          { type: 'instagram', url: '' },
+          { type: 'tiktok', url: '' },
+          { type: 'youtube', url: '' }
+        ],
+        feats: [],
+        cars: []
+      };
+      await client.query('INSERT INTO sites (slug, content) VALUES ($1, $2)', ['main', JSON.stringify(defaultContent)]);
+      console.log('✅ Default site created');
+    }
+
+    console.log('✅ Database initialized');
+  } finally {
+    client.release();
+  }
+}
+
+// ═══ MIDDLEWARE ═══
+app.use(compression());
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false
+}));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+// Rate limiting for API
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: 'Too many requests' }
+});
+
+// Auth middleware
+function requireAuth(req, res, next) {
+  const token = req.cookies.token || req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+}
+
+// ═══ STATIC FILES ═══
+app.use('/public', express.static(path.join(__dirname, 'public')));
+app.use('/favicon.ico', express.static(path.join(__dirname, 'public', 'favicon.ico')));
+
+// ═══ AUTH API ═══
+app.post('/api/auth/login', apiLimiter, async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    const user = result.rows[0];
+    if (!user || !await bcrypt.compare(password, user.password_hash)) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+    res.json({ ok: true, token });
+  } catch (e) {
+    console.error('Login error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie('token');
+  res.json({ ok: true });
+});
+
+app.get('/api/auth/check', requireAuth, (req, res) => {
+  res.json({ ok: true, user: req.user.username });
+});
+
+// ═══ CONTENT API ═══
+app.get('/api/content', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT content FROM sites WHERE slug = $1', ['main']);
+    if (result.rows.length === 0) return res.json({});
+    res.json(result.rows[0].content);
+  } catch (e) {
+    console.error('Get content error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.put('/api/content', requireAuth, async (req, res) => {
+  try {
+    const content = req.body;
+    await pool.query(
+      'UPDATE sites SET content = $1, updated_at = NOW() WHERE slug = $2',
+      [JSON.stringify(content), 'main']
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('Save content error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ═══ ADMIN PAGE ═══
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// ═══ PROFILE PAGE (Dynamic) ═══
+app.get('/', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT content, seo FROM sites WHERE slug = $1', ['main']);
+    if (result.rows.length === 0) return res.redirect('/admin');
+    const data = result.rows[0].content;
+    const seo = result.rows[0].seo || {};
+    res.send(renderProfilePage(data, seo));
+  } catch (e) {
+    console.error('Render error:', e);
+    res.status(500).send('Server error');
+  }
+});
+
+// ═══ PROFILE RENDERER ═══
+function renderProfilePage(data, seo = {}) {
+  const p = data.profile || {};
+  const socials = data.socials || [];
+  const feats = data.feats || [];
+  const cars = data.cars || [];
+  const esc = s => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const TYPES = {
+    onlyfans:{n:'OnlyFans',bg:'#003CFF'},instagram:{n:'Instagram',bg:'linear-gradient(45deg,#F77737,#FD1D1D 50%,#833AB4)'},instagram2:{n:'Instagram 2',bg:'linear-gradient(135deg,#F77737,#FD1D1D 50%,#C13584)'},tiktok:{n:'TikTok',bg:'linear-gradient(135deg,#25F4EE,#FD1D1D)'},snapchat:{n:'Snapchat',bg:'#FFFC00'},twitter:{n:'X / Twitter',bg:'#1a1a1a'},youtube:{n:'YouTube',bg:'#FF0000'},website:{n:'Website',bg:'#7B7B7B'},amazon:{n:'Amazon',bg:'#FF9500'},amazon2:{n:'Amazon 2',bg:'#FF7500'},facebook:{n:'Facebook',bg:'#1877F2'},linkedin:{n:'LinkedIn',bg:'#0A66C2'},spotify:{n:'Spotify',bg:'#1DB954'},telegram:{n:'Telegram',bg:'#26A5E4'},whatsapp:{n:'WhatsApp',bg:'#25D366'},pinterest:{n:'Pinterest',bg:'#E60023'},twitch:{n:'Twitch',bg:'#9146FF'},discord:{n:'Discord',bg:'#5865F2'},email:{n:'Email',bg:'#EA4335'},phone:{n:'Phone',bg:'#34C759'}
+  };
+  const SVG = {
+    onlyfans:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="white" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="white"/></svg>',
+    instagram:'<svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.756 0 8.331.012 7.052.07 3.656.262.262 3.656.07 7.052.012 8.331 0 8.756 0 12s.012 3.669.07 4.948c.192 3.396 3.586 6.79 6.982 6.982C8.331 23.988 8.756 24 12 24s3.669-.012 4.948-.07c3.397-.192 6.79-3.586 6.982-6.982.058-1.279.07-1.704.07-4.948s-.012-3.669-.07-4.948c-.192-3.397-3.586-6.79-6.982-6.982C15.669.012 15.244 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zm0 10.162a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 11-2.88 0 1.44 1.44 0 012.88 0z" fill="white"/></svg>',
+    instagram2:'<svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.756 0 8.331.012 7.052.07 3.656.262.262 3.656.07 7.052.012 8.331 0 8.756 0 12s.012 3.669.07 4.948c.192 3.396 3.586 6.79 6.982 6.982C8.331 23.988 8.756 24 12 24s3.669-.012 4.948-.07c3.397-.192 6.79-3.586 6.982-6.982.058-1.279.07-1.704.07-4.948s-.012-3.669-.07-4.948c-.192-3.397-3.586-6.79-6.982-6.982C15.669.012 15.244 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zm0 10.162a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 11-2.88 0 1.44 1.44 0 012.88 0z" fill="white"/></svg>',
+    tiktok:'<svg viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.1 1.75 2.9 2.9 0 012.31-4.64c.29 0 .58.03.88.14v-3.5a5.9 5.9 0 00-1-.1A6.11 6.11 0 005 13.75a6.49 6.49 0 006.5 6.5A6.41 6.41 0 0018 13.75V9.64a4.83 4.83 0 002.77 1.07V8.35c-.2-.02-.39-.06-.58-.06z" fill="white"/></svg>',
+    snapchat:'<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 3a2 2 0 110 4 2 2 0 010-4zm0 14c-2.67 0-5-1.34-6.4-3.38l1.64-1.15A5.98 5.98 0 0012 17c2.05 0 3.85-1.03 4.76-2.53l1.64 1.15A7.97 7.97 0 0112 19z" fill="black"/></svg>',
+    twitter:'<svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" fill="white"/></svg>',
+    youtube:'<svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" fill="white"/></svg>',
+    website:'<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" fill="white"/></svg>',
+    amazon:'<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="white"/></svg>',
+    amazon2:'<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="white"/></svg>',
+    facebook:'<svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" fill="white"/></svg>',
+    linkedin:'<svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.064 2.064 0 110-4.128 2.064 2.064 0 010 4.128zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0z" fill="white"/></svg>',
+    spotify:'<svg viewBox="0 0 24 24"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" fill="white"/></svg>',
+    telegram:'<svg viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 01.171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.479.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" fill="white"/></svg>',
+    whatsapp:'<svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" fill="white"/></svg>',
+    pinterest:'<svg viewBox="0 0 24 24"><path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 01.083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.631-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12.017 24c6.624 0 11.99-5.367 11.99-11.988C24.007 5.367 18.641 0 12.017 0z" fill="white"/></svg>',
+    twitch:'<svg viewBox="0 0 24 24"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z" fill="white"/></svg>',
+    discord:'<svg viewBox="0 0 24 24"><path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.865-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.618-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.078-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.076.076 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.086-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.332-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.086-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.332-.946 2.418-2.157 2.418z" fill="white"/></svg>',
+    email:'<svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" fill="white"/></svg>',
+    phone:'<svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" fill="white"/></svg>'
+  };
+
+  // Build social icons HTML
+  const socialsHTML = socials.filter(s => s.url).map(s => {
+    const t = TYPES[s.type];
+    if (!t) return '';
+    return `<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer" class="social-icon" style="background:${t.bg}" aria-label="${esc(t.n)}">${SVG[s.type] || ''}</a>`;
+  }).join('');
+
+  // All social icons (including empty) for display
+  const allSocialsHTML = socials.map(s => {
+    const t = TYPES[s.type];
+    if (!t) return '';
+    const wrapper = s.url ? [`<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer" class="social-link">`, '</a>'] : ['<div class="social-link">', '</div>'];
+    return `${wrapper[0]}<div class="social-icon" style="background:${t.bg}">${SVG[s.type] || ''}</div>${wrapper[1]}`;
+  }).join('');
+
+  // Featured links HTML
+  const featsHTML = feats.map(f => {
+    const imgBg = f.imgUrl ? `background-image:url('${f.imgUrl}');background-size:cover;background-position:center;` : `background:linear-gradient(135deg,${f.color || '#667eea'},${f.color || '#764ba2'}80);`;
+    const wrapper = f.url ? [`<a href="${esc(f.url)}" target="_blank" rel="noopener noreferrer" class="feat-link">`, '</a>'] : ['<div class="feat-link">', '</div>'];
+    return `${wrapper[0]}<div class="feat-card-display" style="${imgBg}"><div class="feat-overlay"><div class="feat-icon" style="background:${f.color || '#667eea'}"><svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#fff"><circle cx="12" cy="12" r="10"/></svg></div><span class="feat-title">${esc(f.title)}</span></div></div>${wrapper[1]}`;
+  }).join('');
+
+  // Carousel HTML
+  const carsHTML = cars.map(c => {
+    const svg = SVG[c.icon] || SVG.website || '';
+    const wrapper = c.url ? [`<a href="${esc(c.url)}" target="_blank" rel="noopener noreferrer" class="car-link">`, '</a>'] : ['<div class="car-link">', '</div>'];
+    return `${wrapper[0]}<div class="car-card" style="background:${c.grad || 'linear-gradient(135deg,#667eea,#764ba2)'}"><div class="car-icon">${svg}</div><div class="car-title">${esc(c.title)}</div><div class="car-sub">${esc(c.sub || '')}</div></div>${wrapper[1]}`;
+  }).join('');
+
+  const verifiedBadge = p.verified ? `<div class="verified-badge"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:#fff"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg></div>` : '';
+
+  const coverHTML = p.coverUrl ? `<img src="${esc(p.coverUrl)}" alt="Cover" class="cover-img">` : `<div class="cover-gradient"></div>`;
+  const avatarHTML = p.avatarUrl ? `<img src="${esc(p.avatarUrl)}" alt="${esc(p.name)}" class="avatar-img">` : `<div class="avatar-placeholder"></div>`;
+
+  const title = seo.title || p.name || 'LinkCloud';
+  const description = seo.description || p.bio || '';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>${esc(title)}</title>
+  <meta name="description" content="${esc(description)}">
+  <meta property="og:title" content="${esc(title)}">
+  <meta property="og:description" content="${esc(description)}">
+  <meta property="og:type" content="profile">
+  ${p.avatarUrl ? `<meta property="og:image" content="${esc(p.avatarUrl)}">` : ''}
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.ico">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f0f2f5;min-height:100vh;display:flex;justify-content:center}
+    .container{width:100%;max-width:480px;background:#fff;min-height:100vh;box-shadow:0 0 20px rgba(0,0,0,.08)}
+
+    /* Cover */
+    .cover{position:relative;height:180px;overflow:hidden}
+    .cover-img{width:100%;height:100%;object-fit:cover}
+    .cover-gradient{width:100%;height:100%;background:linear-gradient(135deg,#667eea,#764ba2)}
+
+    /* Avatar */
+    .avatar-section{display:flex;flex-direction:column;align-items:center;margin-top:-55px;position:relative;z-index:2}
+    .avatar-wrapper{position:relative}
+    .avatar-img,.avatar-placeholder{width:110px;height:110px;border-radius:50%;border:4px solid #fff;box-shadow:0 4px 15px rgba(0,0,0,.15);object-fit:cover}
+    .avatar-placeholder{background:linear-gradient(135deg,#667eea,#764ba2)}
+    .verified-badge{position:absolute;bottom:4px;right:4px;width:28px;height:28px;background:#1DA1F2;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #fff}
+
+    /* Profile Info */
+    .profile-info{text-align:center;padding:16px 24px 0}
+    .profile-name{font-size:24px;font-weight:800;color:#1a1a2e;letter-spacing:.5px}
+    .profile-bio{color:#666;font-size:14px;margin-top:8px;line-height:1.5}
+
+    /* Social Icons */
+    .socials{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;padding:24px 16px}
+    .social-link{text-decoration:none}
+    .social-icon{width:55px;height:55px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:transform .2s,box-shadow .2s;cursor:pointer}
+    .social-icon:hover{transform:scale(1.1);box-shadow:0 4px 15px rgba(0,0,0,.2)}
+    .social-icon svg{width:24px;height:24px}
+
+    /* Featured Links */
+    .section-title{color:#667eea;text-align:center;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:8px 0 16px}
+    .feat-link{text-decoration:none;display:block;margin:0 16px 16px}
+    .feat-card-display{height:200px;border-radius:16px;overflow:hidden;position:relative;transition:transform .2s}
+    .feat-card-display:hover{transform:scale(1.02)}
+    .feat-overlay{position:absolute;bottom:0;left:0;right:0;height:80px;background:linear-gradient(to top,rgba(0,0,0,.65),transparent);display:flex;align-items:flex-end;padding:14px}
+    .feat-icon{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-right:12px;flex-shrink:0}
+    .feat-title{color:#fff;font-weight:700;font-size:15px}
+
+    /* Carousel */
+    .carousel{display:flex;gap:12px;overflow-x:auto;padding:0 16px 16px;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory}
+    .carousel::-webkit-scrollbar{display:none}
+    .car-link{text-decoration:none;flex-shrink:0;scroll-snap-align:start}
+    .car-card{width:200px;height:200px;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;transition:transform .2s}
+    .car-card:hover{transform:scale(1.03)}
+    .car-icon{margin-bottom:12px}
+    .car-icon svg{width:40px;height:40px;fill:#fff}
+    .car-title{color:#fff;font-weight:700;font-size:15px;text-align:center}
+    .car-sub{color:rgba(255,255,255,.8);font-size:12px;text-align:center;margin-top:4px}
+
+    /* Footer */
+    .footer{text-align:center;padding:32px 0;border-top:1px solid #eee;margin:16px 24px 0}
+    .footer-label{color:#999;font-size:12px;margin-bottom:6px}
+    .footer-brand{font-weight:800;font-size:14px;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+
+    /* Animations */
+    @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+    .animate{animation:fadeUp .6s ease forwards}
+    .delay-1{animation-delay:.1s;opacity:0}
+    .delay-2{animation-delay:.2s;opacity:0}
+    .delay-3{animation-delay:.3s;opacity:0}
+    .delay-4{animation-delay:.4s;opacity:0}
+    .delay-5{animation-delay:.5s;opacity:0}
+
+    /* In-App Browser Banner */
+    .inapp-banner{display:none;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:14px 20px;text-align:center;font-size:13px;font-weight:600;cursor:pointer;position:fixed;top:0;left:0;right:0;z-index:1000}
+    .inapp-banner.show{display:block}
+  </style>
+</head>
+<body>
+  <div class="inapp-banner" id="inappBanner" onclick="escapeInApp()">
+    Open in browser for the best experience ↗
+  </div>
+  <div class="container">
+    <div class="cover animate">${coverHTML}</div>
+    <div class="avatar-section animate delay-1">
+      <div class="avatar-wrapper">
+        ${avatarHTML}
+        ${verifiedBadge}
+      </div>
+    </div>
+    <div class="profile-info animate delay-2">
+      <h1 class="profile-name">${esc(p.name || 'Your Name')}</h1>
+      <p class="profile-bio">${esc(p.bio || '')}</p>
+    </div>
+    <div class="socials animate delay-3">${allSocialsHTML}</div>
+    ${feats.length ? `<div class="animate delay-4"><div class="section-title">Featured Links</div>${featsHTML}</div>` : ''}
+    ${cars.length ? `<div class="animate delay-5"><div class="section-title" style="margin-top:8px">Featured Content</div><div class="carousel">${carsHTML}</div></div>` : ''}
+    <div class="footer">
+      <div class="footer-label">Powered by</div>
+      <div class="footer-brand">LINKCLOUD</div>
+    </div>
+  </div>
+
+  <script>
+    // In-App Browser Detection & Escape
+    (function(){
+      var ua = navigator.userAgent || navigator.vendor || '';
+      var inApp = /Instagram|FBAN|FBAV|BytedanceWebview|musical_ly|TikTok|LinkedInApp/i.test(ua);
+      if(inApp){
+        document.getElementById('inappBanner').classList.add('show');
+        document.body.style.paddingTop='48px';
+      }
+    })();
+    function escapeInApp(){
+      var url=window.location.href;
+      var ios=/iPad|iPhone|iPod/.test(navigator.userAgent);
+      if(ios){window.location='x-safari-'+url}
+      else{
+        try{window.location='intent://'+url.replace(/https?:\\/\\//,'')+'#Intent;scheme=https;end'}
+        catch(e){window.open(url,'_system')}
+      }
+    }
+  </script>
+</body>
+</html>`;
+}
+
+// ═══ START ═══
+initDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`🚀 LinkCloud running on port ${PORT}`);
+  });
+}).catch(err => {
+  console.error('Failed to initialize database:', err);
+  process.exit(1);
+});
