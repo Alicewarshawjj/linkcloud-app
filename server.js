@@ -390,8 +390,9 @@ function getCountryFromIP(ip, req = null) {
     const geo = geoip.lookup(cleanIP);
     console.log('🌍 GEO: Lookup result:', geo);
     if (geo && geo.country) {
+      // geoip-country returns: country (code), name (full name)
       const result = {
-        country: COUNTRY_NAMES[geo.country] || geo.country,
+        country: geo.name || COUNTRY_NAMES[geo.country] || geo.country,
         countryCode: geo.country,
         city: ''
       };
