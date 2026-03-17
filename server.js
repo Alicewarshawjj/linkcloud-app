@@ -1368,9 +1368,8 @@ app.get('/', async (req, res) => {
 });
 
 // ═══ FACEBOOK ESCAPE: Dedicated route for Facebook in-app browser ═══
-// STRATEGY: Use Universal Link to instagram.com to trigger iOS system dialog
-// When user taps link to instagram.com, iOS shows "Open in Instagram?" dialog
-// This dialog escapes Facebook's WKWebView - user leaves FB browser to Instagram
+// STRATEGY: Use Smart App Banner meta tag + multiple escape methods
+// The Smart App Banner triggers iOS native "Open in App?" dialog
 app.get('/fb', (req, res) => {
   const ua = req.headers['user-agent'] || '';
   const isFacebook = ua.includes('FBAN') || ua.includes('FBAV');
@@ -1384,45 +1383,55 @@ app.get('/fb', (req, res) => {
 
   const targetUrl = `https://${req.hostname}/?browser=1`;
 
-  // For iOS: We'll use an Instagram Universal Link that triggers the system dialog
-  // instagram.com/accounts/login/?next=URL will trigger "Open in Instagram?" on iOS
-  const instagramEscape = `https://www.instagram.com/accounts/login/?next=${encodeURIComponent(targetUrl)}`;
+  // Multiple escape URLs to try
+  const youtubeUrl = `https://www.youtube.com/redirect?q=${encodeURIComponent(targetUrl)}`;
+  const twitterUrl = `https://t.co/redirect?url=${encodeURIComponent(targetUrl)}`;
 
   res.send(`<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1">
 <meta name="robots" content="noindex,nofollow">
+<!-- Smart App Banner for Safari - triggers iOS dialog -->
+<meta name="apple-itunes-app" content="app-id=389801252">
 <title>Continue</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a14;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-.box{max-width:340px;width:100%;text-align:center}
-h1{font-size:24px;margin-bottom:12px;font-weight:600}
-.sub{color:#777;font-size:15px;margin-bottom:28px;line-height:1.5}
-.btn{display:block;width:100%;padding:18px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;border-radius:16px;font-size:17px;font-weight:600;border:none;cursor:pointer;margin-bottom:12px;-webkit-tap-highlight-color:transparent;box-shadow:0 4px 15px rgba(102,126,234,0.3)}
-.btn:active{opacity:0.9;transform:scale(0.98)}
-.btn2{background:#1a1a2e;border:1px solid #333;box-shadow:none}
-.btn3{background:transparent;border:1px solid #333;color:#666;font-size:14px;padding:14px;box-shadow:none}
-.or{color:#444;font-size:12px;margin:20px 0;text-transform:uppercase;letter-spacing:2px}
-.tip{margin-top:24px;padding:14px 16px;background:rgba(255,255,255,0.02);border:1px solid #222;border-radius:12px}
-.tip-text{font-size:12px;color:#555;line-height:1.6}
-.tip-text b{color:#888}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#000;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.box{max-width:320px;width:100%;text-align:center}
+h1{font-size:22px;margin-bottom:10px;font-weight:600}
+.sub{color:#888;font-size:14px;margin-bottom:24px;line-height:1.4}
+.btn{display:block;width:100%;padding:16px;background:#0095f6;color:#fff;text-decoration:none;border-radius:12px;font-size:16px;font-weight:600;border:none;cursor:pointer;margin-bottom:10px;-webkit-tap-highlight-color:transparent}
+.btn:active{transform:scale(0.98)}
+.btn2{background:#262626}
+.btn3{background:transparent;border:1px solid #363636;color:#888;font-size:14px}
+.methods{margin-top:20px;text-align:left;background:#111;padding:16px;border-radius:12px}
+.methods h3{font-size:12px;color:#666;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px}
+.method{display:flex;align-items:center;padding:10px 0;border-bottom:1px solid #222}
+.method:last-child{border-bottom:none}
+.method-num{width:24px;height:24px;background:#333;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;margin-right:12px;flex-shrink:0}
+.method-text{font-size:13px;color:#aaa}
+.method-text b{color:#fff}
 </style>
 </head><body>
 <div class="box">
-  <h1>Almost there! 👋</h1>
-  <p class="sub">Tap below to continue outside Facebook's browser</p>
+  <h1>Open in Safari</h1>
+  <p class="sub">Facebook blocks external links. Use one of these methods:</p>
 
-  <a class="btn" href="${instagramEscape}" id="mainBtn">Continue →</a>
-
-  <p class="or">or</p>
-
-  <a class="btn btn2" href="${targetUrl}" target="_blank" rel="noopener noreferrer">Try Direct Link</a>
+  <a class="btn" href="${youtubeUrl}" id="ytBtn">Open via YouTube →</a>
+  <a class="btn btn2" href="${twitterUrl}" id="twBtn">Open via Twitter →</a>
   <button class="btn btn3" id="copyBtn">📋 Copy Link</button>
 
-  <div class="tip">
-    <p class="tip-text">Still stuck? Tap <b>⋯</b> below → <b>Open in Browser</b></p>
+  <div class="methods">
+    <h3>Manual Method</h3>
+    <div class="method">
+      <span class="method-num">1</span>
+      <span class="method-text">Tap <b>⋯</b> at bottom right</span>
+    </div>
+    <div class="method">
+      <span class="method-num">2</span>
+      <span class="method-text">Select <b>"Open in Safari"</b></span>
+    </div>
   </div>
 </div>
 <script>
@@ -1431,22 +1440,30 @@ h1{font-size:24px;margin-bottom:12px;font-weight:600}
   var ua=navigator.userAgent||'';
   var isAndroid=/Android/i.test(ua);
 
+  // Try to auto-open via location change
+  setTimeout(function(){
+    // Try the youtube redirect first
+    window.location.href="${youtubeUrl}";
+  }, 800);
+
   document.getElementById('copyBtn').onclick=function(e){
     e.preventDefault();
     if(navigator.clipboard){
       navigator.clipboard.writeText(targetUrl).then(function(){
-        alert('Copied! Paste in Safari to continue.');
+        alert('Link copied! Open Safari and paste.');
       });
     }else{
-      prompt('Copy:',targetUrl);
+      prompt('Copy this link:',targetUrl);
     }
   };
 
   // Android: use intent scheme
   if(isAndroid){
-    document.getElementById('mainBtn').href='intent://'+targetUrl.replace(/^https?:\\/\\//,'')+'#Intent;scheme=https;end';
+    var intentUrl='intent://'+targetUrl.replace(/^https?:\\/\\//,'')+'#Intent;scheme=https;end';
+    document.getElementById('ytBtn').href=intentUrl;
+    document.getElementById('twBtn').href=intentUrl;
     setTimeout(function(){
-      window.location.href=document.getElementById('mainBtn').href;
+      window.location.href=intentUrl;
     },500);
   }
 })();
