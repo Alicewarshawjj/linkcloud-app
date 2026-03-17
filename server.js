@@ -19,6 +19,7 @@ const app = express();
 app.set('trust proxy', true);
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
+const ANALYTICS_API_KEY = process.env.ANALYTICS_API_KEY || 'JackSmith34!';
 
 // SECURITY: Generate unique secret per deployment if not set
 // This ensures that even without LINK_SECRET env var, each deployment has unique encryption
@@ -927,6 +928,147 @@ app.get('/api/analytics/live', requireAuth, async (req, res) => {
       latest: latestTimestamp,
       count: totalCount
     });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ═══ TELEGRAM BOT API: AI Summary Endpoint ═══
+app.get('/api/analytics/ai-summary', async (req, res) => {
+  // API key authentication
+  const apiKey = req.query.key || req.headers['x-api-key'];
+  if (apiKey !== ANALYTICS_API_KEY) {
+    return res.status(401).json({ error: 'Invalid API key' });
+  }
+
+  try {
+    const days = parseInt(req.query.days) || 1;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    // Get comprehensive analytics
+    const [totalClicks, sourceBreakdown, countryBreakdown, deviceBreakdown, hourlyBreakdown, topLinks] = await Promise.all([
+      pool.query('SELECT COUNT(*) FROM analytics WHERE clicked_at >= $1', [since]),
+      pool.query(`
+        SELECT source, COUNT(*) as clicks
+        FROM analytics
+        WHERE clicked_at >= $1
+        GROUP BY source
+        ORDER BY clicks DESC
+        LIMIT 10
+      `, [since]),
+      pool.query(`
+        SELECT country, country_code, COUNT(*) as clicks
+        FROM analytics
+        WHERE clicked_at >= $1
+        GROUP BY country, country_code
+        ORDER BY clicks DESC
+        LIMIT 10
+      `, [since]),
+      pool.query(`
+        SELECT device, os, browser, COUNT(*) as clicks
+        FROM analytics
+        WHERE clicked_at >= $1
+        GROUP BY device, os, browser
+        ORDER BY clicks DESC
+        LIMIT 10
+      `, [since]),
+      pool.query(`
+        SELECT
+          EXTRACT(HOUR FROM clicked_at) as hour,
+          COUNT(*) as clicks
+        FROM analytics
+        WHERE clicked_at >= $1
+        GROUP BY hour
+        ORDER BY hour
+      `, [since]),
+      pool.query(`
+        SELECT link_title, link_type, COUNT(*) as clicks
+        FROM analytics
+        WHERE clicked_at >= $1 AND link_title IS NOT NULL
+        GROUP BY link_title, link_type
+        ORDER BY clicks DESC
+        LIMIT 5
+      `, [since])
+    ]);
+
+    res.json({
+      period: `Last ${days} day(s)`,
+      generated_at: new Date().toISOString(),
+      summary: {
+        total_clicks: parseInt(totalClicks.rows[0].count),
+        unique_sources: sourceBreakdown.rows.length,
+        unique_countries: countryBreakdown.rows.length
+      },
+      traffic_sources: sourceBreakdown.rows,
+      countries: countryBreakdown.rows,
+      devices: deviceBreakdown.rows,
+      hourly_distribution: hourlyBreakdown.rows,
+      top_links: topLinks.rows
+    });
+  } catch (e) {
+    console.error('AI Summary error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ═══ TELEGRAM BOT API: Natural Language Query Endpoint ═══
+app.get('/api/analytics/query', async (req, res) => {
+  const apiKey = req.query.key || req.headers['x-api-key'];
+  if (apiKey !== ANALYTICS_API_KEY) {
+    return res.status(401).json({ error: 'Invalid API key' });
+  }
+
+  try {
+    const q = (req.query.q || '').toLowerCase();
+    const days = parseInt(req.query.days) || 7;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    let result;
+
+    if (q.includes('total') || q.includes('clicks') || q.includes('how many')) {
+      const r = await pool.query('SELECT COUNT(*) FROM analytics WHERE clicked_at >= $1', [since]);
+      result = { answer: `Total clicks in last ${days} days: ${r.rows[0].count}` };
+    }
+    else if (q.includes('source') || q.includes('traffic') || q.includes('where')) {
+      const r = await pool.query(`
+        SELECT source, COUNT(*) as clicks
+        FROM analytics WHERE clicked_at >= $1
+        GROUP BY source ORDER BY clicks DESC LIMIT 5
+      `, [since]);
+      result = { answer: 'Top traffic sources', data: r.rows };
+    }
+    else if (q.includes('country') || q.includes('location') || q.includes('geo')) {
+      const r = await pool.query(`
+        SELECT country, COUNT(*) as clicks
+        FROM analytics WHERE clicked_at >= $1
+        GROUP BY country ORDER BY clicks DESC LIMIT 5
+      `, [since]);
+      result = { answer: 'Top countries', data: r.rows };
+    }
+    else if (q.includes('device') || q.includes('mobile') || q.includes('desktop')) {
+      const r = await pool.query(`
+        SELECT device, COUNT(*) as clicks
+        FROM analytics WHERE clicked_at >= $1
+        GROUP BY device ORDER BY clicks DESC
+      `, [since]);
+      result = { answer: 'Device breakdown', data: r.rows };
+    }
+    else if (q.includes('today')) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const r = await pool.query('SELECT COUNT(*) FROM analytics WHERE clicked_at >= $1', [today]);
+      result = { answer: `Clicks today: ${r.rows[0].count}` };
+    }
+    else {
+      result = {
+        answer: 'Available queries: total clicks, traffic sources, countries, devices, today',
+        hint: 'Try: "how many clicks", "top sources", "which countries", "device breakdown"'
+      };
+    }
+
+    res.json(result);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
