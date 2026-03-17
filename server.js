@@ -1664,8 +1664,10 @@ app.get('/:source', async (req, res, next) => {
     const isGeoBlocked = geoInfo.countryCode === 'IL';
 
     // Force in-app overlay for specific sources (Reddit, etc.)
+    // BUT skip if ?browser=1 is present (means user already clicked "Open in Safari")
     const forceInAppSources = ['reddit', 'rd'];
-    const forceInApp = forceInAppSources.includes(cleanSource.toLowerCase());
+    const alreadyInBrowser = req.query.browser === '1';
+    const forceInApp = !alreadyInBrowser && forceInAppSources.includes(cleanSource.toLowerCase());
 
     res.send(renderProfilePage(data, seo, isBotRequest, cleanSource, isGeoBlocked, forceInApp));
   } catch (e) {
