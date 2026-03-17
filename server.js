@@ -1368,9 +1368,9 @@ app.get('/', async (req, res) => {
 });
 
 // ═══ FACEBOOK ESCAPE: Dedicated route for Facebook in-app browser ═══
-// Key insight from juicy.bio: They redirect to a Universal Link (like instagram.com)
-// which triggers iOS "Open in App?" dialog - escaping Facebook's browser
-// For us: We'll try direct link + Safari scheme, then show manual options
+// STRATEGY: Use Universal Link to instagram.com to trigger iOS system dialog
+// When user taps link to instagram.com, iOS shows "Open in Instagram?" dialog
+// This dialog escapes Facebook's WKWebView - user leaves FB browser to Instagram
 app.get('/fb', (req, res) => {
   const ua = req.headers['user-agent'] || '';
   const isFacebook = ua.includes('FBAN') || ua.includes('FBAV');
@@ -1383,7 +1383,10 @@ app.get('/fb', (req, res) => {
   }
 
   const targetUrl = `https://${req.hostname}/?browser=1`;
-  const safariUrl = `x-safari-https://${req.hostname}/?browser=1`;
+
+  // For iOS: We'll use an Instagram Universal Link that triggers the system dialog
+  // instagram.com/accounts/login/?next=URL will trigger "Open in Instagram?" on iOS
+  const instagramEscape = `https://www.instagram.com/accounts/login/?next=${encodeURIComponent(targetUrl)}`;
 
   res.send(`<!DOCTYPE html>
 <html><head>
@@ -1394,68 +1397,58 @@ app.get('/fb', (req, res) => {
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a14;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-.box{max-width:320px;width:100%;text-align:center}
-h1{font-size:20px;margin-bottom:8px;font-weight:600}
-.sub{color:#888;font-size:14px;margin-bottom:24px}
-.btn{display:block;width:100%;padding:16px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;border-radius:14px;font-size:16px;font-weight:600;border:none;cursor:pointer;margin-bottom:10px;-webkit-tap-highlight-color:transparent}
+.box{max-width:340px;width:100%;text-align:center}
+h1{font-size:24px;margin-bottom:12px;font-weight:600}
+.sub{color:#777;font-size:15px;margin-bottom:28px;line-height:1.5}
+.btn{display:block;width:100%;padding:18px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;border-radius:16px;font-size:17px;font-weight:600;border:none;cursor:pointer;margin-bottom:12px;-webkit-tap-highlight-color:transparent;box-shadow:0 4px 15px rgba(102,126,234,0.3)}
 .btn:active{opacity:0.9;transform:scale(0.98)}
-.btn2{background:#1c1c2e;border:1px solid #333}
-.btn3{background:transparent;border:1px solid #444;color:#777;font-size:14px}
-.tip{margin-top:20px;padding:16px;background:#111;border-radius:12px;text-align:left}
-.tip-title{font-size:12px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
-.tip-text{font-size:13px;color:#999;line-height:1.5}
-.tip-text strong{color:#ccc}
+.btn2{background:#1a1a2e;border:1px solid #333;box-shadow:none}
+.btn3{background:transparent;border:1px solid #333;color:#666;font-size:14px;padding:14px;box-shadow:none}
+.or{color:#444;font-size:12px;margin:20px 0;text-transform:uppercase;letter-spacing:2px}
+.tip{margin-top:24px;padding:14px 16px;background:rgba(255,255,255,0.02);border:1px solid #222;border-radius:12px}
+.tip-text{font-size:12px;color:#555;line-height:1.6}
+.tip-text b{color:#888}
 </style>
 </head><body>
 <div class="box">
-  <h1>Open in Browser</h1>
-  <p class="sub">Facebook blocks external links</p>
+  <h1>Almost there! 👋</h1>
+  <p class="sub">Tap below to continue outside Facebook's browser</p>
 
-  <a class="btn" href="${safariUrl}" id="safariLink">Open in Safari ↗</a>
-  <a class="btn btn2" href="${targetUrl}" target="_blank" rel="noopener">Direct Link</a>
-  <button class="btn btn3" id="copyBtn">Copy Link</button>
+  <a class="btn" href="${instagramEscape}" id="mainBtn">Continue →</a>
+
+  <p class="or">or</p>
+
+  <a class="btn btn2" href="${targetUrl}" target="_blank" rel="noopener noreferrer">Try Direct Link</a>
+  <button class="btn btn3" id="copyBtn">📋 Copy Link</button>
 
   <div class="tip">
-    <div class="tip-title">Not working?</div>
-    <div class="tip-text">
-      Tap <strong>⋯</strong> at bottom right<br>
-      Then tap <strong>"Open in Browser"</strong>
-    </div>
+    <p class="tip-text">Still stuck? Tap <b>⋯</b> below → <b>Open in Browser</b></p>
   </div>
 </div>
 <script>
 (function(){
-  var url="${targetUrl}";
-  var safariUrl="${safariUrl}";
+  var targetUrl="${targetUrl}";
   var ua=navigator.userAgent||'';
-  var isIOS=/iPhone|iPad|iPod/i.test(ua);
   var isAndroid=/Android/i.test(ua);
 
-  // Copy button
-  document.getElementById('copyBtn').onclick=function(){
+  document.getElementById('copyBtn').onclick=function(e){
+    e.preventDefault();
     if(navigator.clipboard){
-      navigator.clipboard.writeText(url).then(function(){
-        alert('Copied! Paste in Safari.');
+      navigator.clipboard.writeText(targetUrl).then(function(){
+        alert('Copied! Paste in Safari to continue.');
       });
     }else{
-      prompt('Copy:',url);
+      prompt('Copy:',targetUrl);
     }
   };
 
-  // Android: auto-redirect with intent
+  // Android: use intent scheme
   if(isAndroid){
+    document.getElementById('mainBtn').href='intent://'+targetUrl.replace(/^https?:\\/\\//,'')+'#Intent;scheme=https;end';
     setTimeout(function(){
-      window.location.href='intent://'+url.replace(/^https?:\\/\\//,'')+'#Intent;scheme=https;end';
-    },300);
+      window.location.href=document.getElementById('mainBtn').href;
+    },500);
   }
-
-  // iOS: Safari link click handler - try multiple methods
-  document.getElementById('safariLink').onclick=function(e){
-    // Let the href work first, but also try window.open
-    setTimeout(function(){
-      try{window.open(url,'_blank');}catch(x){}
-    },200);
-  };
 })();
 </script>
 </body></html>`);
