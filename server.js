@@ -1053,149 +1053,6 @@ app.post('/api/analytics/test-click', requireAuth, async (req, res) => {
   }
 });
 
-// ═══ TELEGRAM BOT API: AI Summary Endpoint ═══
-const ANALYTICS_API_KEY = process.env.ANALYTICS_API_KEY || 'JackSmith34!';
-
-app.get('/api/analytics/ai-summary', async (req, res) => {
-  // API key authentication
-  const apiKey = req.query.key || req.headers['x-api-key'];
-  if (apiKey !== ANALYTICS_API_KEY) {
-    return res.status(401).json({ error: 'Invalid API key' });
-  }
-
-  try {
-    const days = parseInt(req.query.days) || 1;
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-
-    // Get comprehensive analytics
-    const [totalClicks, sourceBreakdown, countryBreakdown, deviceBreakdown, hourlyBreakdown, topLinks] = await Promise.all([
-      pool.query('SELECT COUNT(*) FROM analytics WHERE clicked_at >= $1', [since]),
-      pool.query(`
-        SELECT source, COUNT(*) as clicks
-        FROM analytics
-        WHERE clicked_at >= $1
-        GROUP BY source
-        ORDER BY clicks DESC
-        LIMIT 10
-      `, [since]),
-      pool.query(`
-        SELECT country, country_code, COUNT(*) as clicks
-        FROM analytics
-        WHERE clicked_at >= $1
-        GROUP BY country, country_code
-        ORDER BY clicks DESC
-        LIMIT 10
-      `, [since]),
-      pool.query(`
-        SELECT device, os, browser, COUNT(*) as clicks
-        FROM analytics
-        WHERE clicked_at >= $1
-        GROUP BY device, os, browser
-        ORDER BY clicks DESC
-        LIMIT 10
-      `, [since]),
-      pool.query(`
-        SELECT
-          EXTRACT(HOUR FROM clicked_at) as hour,
-          COUNT(*) as clicks
-        FROM analytics
-        WHERE clicked_at >= $1
-        GROUP BY hour
-        ORDER BY hour
-      `, [since]),
-      pool.query(`
-        SELECT link_title, link_type, COUNT(*) as clicks
-        FROM analytics
-        WHERE clicked_at >= $1 AND link_title IS NOT NULL
-        GROUP BY link_title, link_type
-        ORDER BY clicks DESC
-        LIMIT 5
-      `, [since])
-    ]);
-
-    res.json({
-      period: `Last ${days} day(s)`,
-      generated_at: new Date().toISOString(),
-      summary: {
-        total_clicks: parseInt(totalClicks.rows[0].count),
-        unique_sources: sourceBreakdown.rows.length,
-        unique_countries: countryBreakdown.rows.length
-      },
-      traffic_sources: sourceBreakdown.rows,
-      countries: countryBreakdown.rows,
-      devices: deviceBreakdown.rows,
-      hourly_distribution: hourlyBreakdown.rows,
-      top_links: topLinks.rows
-    });
-  } catch (e) {
-    console.error('AI Summary error:', e);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ═══ TELEGRAM BOT API: Natural Language Query Endpoint ═══
-app.get('/api/analytics/query', async (req, res) => {
-  const apiKey = req.query.key || req.headers['x-api-key'];
-  if (apiKey !== ANALYTICS_API_KEY) {
-    return res.status(401).json({ error: 'Invalid API key' });
-  }
-
-  try {
-    const q = (req.query.q || '').toLowerCase();
-    const days = parseInt(req.query.days) || 7;
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-
-    let result;
-
-    if (q.includes('total') || q.includes('clicks') || q.includes('how many')) {
-      const r = await pool.query('SELECT COUNT(*) FROM analytics WHERE clicked_at >= $1', [since]);
-      result = { answer: `Total clicks in last ${days} days: ${r.rows[0].count}` };
-    }
-    else if (q.includes('source') || q.includes('traffic') || q.includes('where')) {
-      const r = await pool.query(`
-        SELECT source, COUNT(*) as clicks
-        FROM analytics WHERE clicked_at >= $1
-        GROUP BY source ORDER BY clicks DESC LIMIT 5
-      `, [since]);
-      result = { answer: 'Top traffic sources', data: r.rows };
-    }
-    else if (q.includes('country') || q.includes('location') || q.includes('geo')) {
-      const r = await pool.query(`
-        SELECT country, COUNT(*) as clicks
-        FROM analytics WHERE clicked_at >= $1
-        GROUP BY country ORDER BY clicks DESC LIMIT 5
-      `, [since]);
-      result = { answer: 'Top countries', data: r.rows };
-    }
-    else if (q.includes('device') || q.includes('mobile') || q.includes('desktop')) {
-      const r = await pool.query(`
-        SELECT device, COUNT(*) as clicks
-        FROM analytics WHERE clicked_at >= $1
-        GROUP BY device ORDER BY clicks DESC
-      `, [since]);
-      result = { answer: 'Device breakdown', data: r.rows };
-    }
-    else if (q.includes('today')) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const r = await pool.query('SELECT COUNT(*) FROM analytics WHERE clicked_at >= $1', [today]);
-      result = { answer: `Clicks today: ${r.rows[0].count}` };
-    }
-    else {
-      result = {
-        answer: 'Available queries: total clicks, traffic sources, countries, devices, today',
-        hint: 'Try: "how many clicks", "top sources", "which countries", "device breakdown"'
-      };
-    }
-
-    res.json(result);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 // ═══ HONEYPOT TRAPS - Block bots that follow hidden links ═══
 // Track IPs that hit honeypots for blocking
 const honeypotHits = new Map();
@@ -1372,67 +1229,13 @@ app.get('/go/:encodedLink', async (req, res) => {
 <noscript><meta http-equiv="refresh" content="0;url=${escapedUrl}"></noscript>
 </body></html>`);
     } else {
-      // Check if it's Facebook in-app browser
-      const isFacebookiOS = /FBAN|FBAV/i.test(user_agent) && /iPhone|iPad|iPod/i.test(user_agent);
-      const isFacebookAndroid = /FBAN|FBAV/i.test(user_agent) && /Android/i.test(user_agent);
-
-      if (isFacebookiOS) {
-        // Facebook iOS: Use the EXACT same 5-method approach with 400ms delays
-        // This is the logic that worked - auto-triggers on page load
-        const jsUrl = url.replace(/"/g, '\\"').replace(/\\/g, '\\\\');
-        res.status(200).send(`<!DOCTYPE html>
-<html><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow">
-<title>Opening...</title>
-<style>
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#000;color:#fff}
-.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-p{margin-top:20px;opacity:0.7}
-a{color:#fff;margin-top:20px}
-</style>
-</head><body>
-<div class="spinner"></div>
-<p>Opening in browser...</p>
-<a href="${url.replace(/"/g, '&quot;')}">Tap here if nothing happens</a>
-<script>
-(function(){
-  var url="${jsUrl}";
-  var methods=[
-    function(){window.location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},
-    function(){var s=url.replace(/^https?:\\/\\//,'');window.location.href='x-safari-https://'+s},
-    function(){var w=window.open('about:blank','_blank');if(w){setTimeout(function(){w.location.href=url},100)}},
-    function(){var a=document.createElement('a');a.href=url;a.target='_system';a.click()},
-    function(){window.open(url,'_system')}
-  ];
-  var i=0;
-  function tryNext(){if(i<methods.length){try{methods[i]()}catch(e){}i++;setTimeout(tryNext,400)}}
-  tryNext();
-})();
-</script>
-</body></html>`);
-      } else if (isFacebookAndroid) {
-        // Facebook Android: Use intent scheme
-        const escapedUrl = url.replace(/"/g, '&quot;');
-        res.status(200).send(`<!DOCTYPE html>
-<html><head>
-<meta name="robots" content="noindex,nofollow">
-<script>
-window.location.href='intent://${url.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;end';
-setTimeout(function(){window.location.href="${url.replace(/"/g, '\\"')}";},1500);
-</script>
-</head><body style="background:#0a0a14"></body></html>`);
-      } else {
-        // Standard redirect for other links (Instagram, etc.)
-        res.status(200).send(`<!DOCTYPE html>
+      // Standard redirect for other links (Instagram, etc.)
+      res.status(200).send(`<!DOCTYPE html>
 <html><head>
 <meta name="robots" content="noindex,nofollow">
 <meta http-equiv="refresh" content="0;url=${url.replace(/"/g, '&quot;')}">
 <script>window.location.replace("${url.replace(/"/g, '\\"').replace(/\\/g, '\\\\')}");</script>
 </head><body style="background:#0a0a14"></body></html>`);
-      }
     }
   } catch (e) {
     // Don't fail the redirect just because analytics failed
@@ -1537,12 +1340,7 @@ app.get('/', async (req, res) => {
     const geoInfo = getCountryFromIP(req);
     const isGeoBlocked = geoInfo.countryCode === 'IL';
 
-    // ═══ FACEBOOK SPECIAL HANDLING ═══
-    // Facebook users see the page normally (no blur overlay)
-    // The magic happens when they CLICK a link - /go/ route handles Facebook specially
-    const isFacebook = /FBAN|FBAV/i.test(userAgent);
-
-    res.send(renderProfilePage(data, seo, isBotRequest, null, isGeoBlocked, isFacebook));
+    res.send(renderProfilePage(data, seo, isBotRequest, null, isGeoBlocked));
   } catch (e) {
     console.error('Render error:', e);
     res.status(500).send('Server error');
@@ -1629,190 +1427,6 @@ a{color:#fff;margin-top:20px}
 </body></html>`);
 });
 
-// ═══ FACEBOOK DEDICATED ROUTE ═══
-// Strategy based on ChatGPT analysis: User gesture + cross-domain approach
-// Key insight: juicy.bio works because it redirects to instagram.com (Universal Link)
-// For Safari, we need: landing page → user tap → different domain
-app.get('/facebook', (req, res) => {
-  const method = parseInt(req.query.m) || 0;
-  const ua = req.headers['user-agent'] || '';
-  const isFBiOS = /FBAN|FBAV/i.test(ua) && /iPhone|iPad|iPod/i.test(ua);
-  const isAndroid = /Android/i.test(ua);
-
-  // Android: intent scheme still works
-  if (isAndroid && !method) {
-    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-<script>window.location.href='intent://cmehere.net/?browser=1#Intent;scheme=https;package=com.android.chrome;end';</script>
-</head><body></body></html>`);
-    return;
-  }
-
-  // Different methods to test
-  switch(method) {
-    case 1:
-      // Method 1: Landing page with real user tap - RECOMMENDED by ChatGPT
-      // Key: NO auto-redirect, user must TAP the link
-      res.send(`<!DOCTYPE html>
-<html><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Continue</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.card{background:#fff;border-radius:24px;padding:40px 30px;text-align:center;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3)}
-.icon{font-size:64px;margin-bottom:20px}
-h1{font-size:24px;margin-bottom:8px;color:#1a1a1a}
-p{color:#666;margin-bottom:30px;font-size:15px;line-height:1.5}
-.btn{display:block;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;text-decoration:none;padding:16px 32px;border-radius:14px;font-size:17px;font-weight:600;transition:transform 0.2s,box-shadow 0.2s}
-.btn:active{transform:scale(0.98)}
-.hint{margin-top:24px;font-size:12px;color:#999}
-</style>
-</head>
-<body>
-<div class="card">
-<div class="icon">🚀</div>
-<h1>Almost there!</h1>
-<p>Tap the button below to continue to the site</p>
-<a class="btn" href="https://cmehere.net/?source=fb_tap">Continue →</a>
-<p class="hint">Opens in your browser</p>
-</div>
-</body></html>`);
-      break;
-
-    case 2:
-      // Method 2: Delayed redirect after page load (gives WKWebView time to settle)
-      res.send(`<!DOCTYPE html>
-<html><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-</head>
-<body style="background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0">
-<div style="text-align:center">
-<div style="font-size:48px;margin-bottom:20px">⏳</div>
-<p>Loading...</p>
-</div>
-<script>
-setTimeout(function(){
-  window.location.href='https://cmehere.net/?source=fb_delay';
-},1500);
-</script>
-</body></html>`);
-      break;
-
-    case 3:
-      // Method 3: Try opening via window.open with user activation simulation
-      res.send(`<!DOCTYPE html>
-<html><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-body{margin:0;padding:20px;font-family:-apple-system,sans-serif;background:#000;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.btn{background:#0095f6;color:#fff;border:none;padding:18px 36px;border-radius:12px;font-size:18px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}
-</style>
-</head>
-<body>
-<button class="btn" onclick="openExternal()">Open Site</button>
-<script>
-function openExternal(){
-  var win = window.open('https://cmehere.net/?source=fb_open','_blank');
-  if(!win || win.closed){
-    window.location.href='https://cmehere.net/?source=fb_open_fallback';
-  }
-}
-</script>
-</body></html>`);
-      break;
-
-    case 4:
-      // Method 4: Copy link fallback with instructions
-      res.send(`<!DOCTYPE html>
-<html><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,sans-serif;background:#1a1a1a;color:#fff;min-height:100vh;padding:30px 20px}
-.container{max-width:360px;margin:0 auto}
-h2{font-size:22px;margin-bottom:16px;text-align:center}
-.step{background:#2a2a2a;border-radius:16px;padding:20px;margin-bottom:16px}
-.step-num{background:#0095f6;color:#fff;width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:bold;margin-right:12px}
-.link-box{background:#333;border-radius:12px;padding:16px;margin:20px 0;word-break:break-all;font-family:monospace;font-size:14px}
-.copy-btn{background:#0095f6;color:#fff;border:none;padding:14px 28px;border-radius:10px;font-size:16px;font-weight:600;width:100%;cursor:pointer}
-.copied{background:#00c853}
-</style>
-</head>
-<body>
-<div class="container">
-<h2>📋 Open in Safari</h2>
-<div class="step"><span class="step-num">1</span>Copy the link below</div>
-<div class="link-box" id="link">cmehere.net</div>
-<button class="copy-btn" onclick="copyLink()">Copy Link</button>
-<div class="step" style="margin-top:20px"><span class="step-num">2</span>Open Safari and paste</div>
-</div>
-<script>
-function copyLink(){
-  navigator.clipboard.writeText('https://cmehere.net/?source=fb_copy').then(function(){
-    var btn=document.querySelector('.copy-btn');
-    btn.textContent='Copied! ✓';
-    btn.classList.add('copied');
-  });
-}
-</script>
-</body></html>`);
-      break;
-
-    case 5:
-      // Method 5: Safari menu hint (minimal)
-      res.send(`<!DOCTYPE html>
-<html><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-body{margin:0;padding:40px 20px;font-family:-apple-system,sans-serif;background:#000;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
-.arrow{font-size:40px;animation:bounce 1s infinite}
-@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-p{margin:20px 0;font-size:16px;opacity:0.9}
-.icon-row{font-size:24px;margin:16px 0}
-</style>
-</head>
-<body>
-<div class="arrow">👆</div>
-<p>Tap <strong>⋯</strong> at the top right</p>
-<div class="icon-row">⋯ → 🌐</div>
-<p>Then tap <strong>"Open in Safari"</strong></p>
-</body></html>`);
-      break;
-
-    default:
-      // Default (m=0 or no param): Smart landing page with prominent CTA
-      // This is the recommended approach: user gesture + clear action
-      res.send(`<!DOCTYPE html>
-<html><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>cmehere.net</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;padding-bottom:env(safe-area-inset-bottom)}
-.logo{font-size:48px;margin-bottom:24px}
-h1{font-size:28px;font-weight:700;margin-bottom:12px}
-.subtitle{color:#888;font-size:15px;margin-bottom:40px}
-.cta{display:block;width:100%;max-width:300px;background:linear-gradient(135deg,#00c6ff 0%,#0072ff 100%);color:#fff;text-decoration:none;padding:18px 32px;border-radius:16px;font-size:18px;font-weight:600;text-align:center;box-shadow:0 8px 32px rgba(0,114,255,0.4);transition:transform 0.15s,box-shadow 0.15s}
-.cta:active{transform:scale(0.97);box-shadow:0 4px 16px rgba(0,114,255,0.3)}
-.footer{position:fixed;bottom:20px;bottom:calc(20px + env(safe-area-inset-bottom));font-size:12px;color:#555}
-</style>
-</head>
-<body>
-<div class="logo">🔗</div>
-<h1>cmehere.net</h1>
-<p class="subtitle">Tap to continue</p>
-<a class="cta" href="https://cmehere.net/?source=facebook&browser=1">Open Site →</a>
-<p class="footer">Opens in your default browser</p>
-</body></html>`);
-  }
-});
-
 // ═══ TRAFFIC SOURCE ROUTE (Clean URLs: /ig-main, /twitter1, etc.) ═══
 app.get('/:source', async (req, res, next) => {
   // Skip if it's a known route
@@ -1854,7 +1468,7 @@ app.get('/:source', async (req, res, next) => {
 });
 
 // ═══ PROFILE RENDERER (Link Protection) ═══
-function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, isGeoBlocked = false, isFacebook = false) {
+function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, isGeoBlocked = false) {
   const p = data.profile || {};
   const socials = data.socials || [];
   // Hide exclusive content (featured & carousel) for geo-blocked visitors
@@ -1975,7 +1589,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   ${p.avatarUrl ? `<meta name="twitter:image" content="${esc(p.avatarUrl)}">` : ''}
   <link rel="icon" href="/favicon.ico">
   <script id="early-deeplink-detect">
-  (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';var ref=document.referrer||'';var params=new URLSearchParams(window.location.search);var isFacebookServer=${isFacebook};if(params.get('noblur')==='1'||isFacebookServer){window.__IS_INAPP__=false}else{window.__IS_INAPP__=ua.indexOf('Instagram')!==-1||ua.indexOf('TikTok')!==-1||ua.indexOf('LinkedInApp')!==-1||ua.indexOf('Twitter')!==-1||ua.indexOf('TwitterAndroid')!==-1||ua.indexOf('Threads')!==-1||ua.indexOf('Barcelona')!==-1||ref.indexOf('t.co')!==-1||ref.indexOf('twitter.com')!==-1||ref.indexOf('x.com')!==-1||ref.indexOf('threads.net')!==-1}window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua)}catch(e){}})();
+  (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';var ref=document.referrer||'';window.__IS_INAPP__=ua.indexOf('Instagram')!==-1||ua.indexOf('FBAN')!==-1||ua.indexOf('FBAV')!==-1||ua.indexOf('TikTok')!==-1||ua.indexOf('LinkedInApp')!==-1||ua.indexOf('Twitter')!==-1||ua.indexOf('TwitterAndroid')!==-1||ua.indexOf('Threads')!==-1||ua.indexOf('Barcelona')!==-1||ref.indexOf('t.co')!==-1||ref.indexOf('twitter.com')!==-1||ref.indexOf('x.com')!==-1||ref.indexOf('threads.net')!==-1;window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua)}catch(e){}})();
   </script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
