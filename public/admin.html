@@ -589,14 +589,13 @@
                     </div>
                 </div>
 
-                <!-- Live Feed & Top Links -->
+                <!-- Traffic Sources -->
                 <div class="analytics-grid">
-                    <!-- Live Feed -->
                     <div class="analytics-card">
                         <div class="analytics-card-header">
-                            <div class="analytics-card-title"><span>⚡</span> Live Feed</div>
+                            <div class="analytics-card-title"><span>📍</span> Traffic Sources</div>
                         </div>
-                        <div class="live-feed" id="liveFeedContent">
+                        <div id="sourcesContent">
                             <div class="spinner"></div>
                         </div>
                     </div>
@@ -609,6 +608,16 @@
                         <div id="topLinksContent">
                             <div class="spinner"></div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Live Feed -->
+                <div class="analytics-card" style="margin-top:20px">
+                    <div class="analytics-card-header">
+                        <div class="analytics-card-title"><span>⚡</span> Live Feed</div>
+                    </div>
+                    <div class="live-feed" id="liveFeedContent">
+                        <div class="spinner"></div>
                     </div>
                 </div>
             </div>
@@ -857,6 +866,9 @@ function renderAnalytics(days) {
 
     // Top Links
     renderTopLinks(data.topLinks || []);
+
+    // Traffic Sources
+    renderSourcesAnalytics(data.bySource || []);
 }
 
 function formatNumber(num) {
@@ -1091,6 +1103,49 @@ function timeAgo(dateStr) {
     if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
     if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
     return Math.floor(diff / 86400) + 'd ago';
+}
+
+function renderSourcesAnalytics(sources) {
+    const container = document.getElementById('sourcesContent');
+
+    if (!sources || !sources.length) {
+        container.innerHTML = `<div class="empty-state"><div class="icon">📍</div><h4>No source data yet</h4><p>Traffic sources will appear here</p></div>`;
+        return;
+    }
+
+    const total = sources.reduce((sum, s) => sum + parseInt(s.clicks), 0);
+
+    let html = '';
+    sources.slice(0, 8).forEach(source => {
+        const name = source.source || 'Direct';
+        const clicks = parseInt(source.clicks);
+        const pct = total > 0 ? Math.round((clicks / total) * 100) : 0;
+        const icon = getSourceIcon(name);
+
+        html += `
+            <div class="top-link-item">
+                <div class="top-link-rank" style="background:${icon.bg};font-size:16px">${icon.emoji}</div>
+                <div class="top-link-info">
+                    <div class="top-link-title">${name}</div>
+                    <div class="top-link-url">${pct}% of traffic</div>
+                </div>
+                <div class="top-link-clicks">${clicks}</div>
+            </div>`;
+    });
+
+    container.innerHTML = html;
+}
+
+function getSourceIcon(name) {
+    name = (name || '').toLowerCase();
+    if (name.includes('ig') || name.includes('instagram')) return { emoji: '📸', bg: 'linear-gradient(45deg,#F77737,#833AB4)' };
+    if (name.includes('twitter') || name.includes('tw') || name.includes('x-')) return { emoji: '🐦', bg: '#1a1a1a' };
+    if (name.includes('tiktok') || name.includes('tt')) return { emoji: '🎵', bg: '#000' };
+    if (name.includes('snap')) return { emoji: '👻', bg: '#FFFC00' };
+    if (name.includes('youtube') || name.includes('yt')) return { emoji: '📺', bg: '#FF0000' };
+    if (name.includes('facebook') || name.includes('fb')) return { emoji: '📘', bg: '#1877F2' };
+    if (name === 'direct' || !name) return { emoji: '🔗', bg: '#667eea' };
+    return { emoji: '🔗', bg: 'linear-gradient(135deg,#667eea,#764ba2)' };
 }
 
 // === EDITOR FUNCTIONS ===
