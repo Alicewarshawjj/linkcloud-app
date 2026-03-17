@@ -1123,12 +1123,55 @@ app.get('/go/:encodedLink', async (req, res) => {
     // This prevents bots from seeing the URL in Location header
     // Real browsers execute JS, bots don't get the URL
     // ══════════════════════════════════════════════════════════════════
-    res.status(200).send(`<!DOCTYPE html>
+
+    // Check if it's a Twitter/X link - needs special handling to open in app
+    const isTwitterLink = url.includes('twitter.com') || url.includes('x.com');
+
+    if (isTwitterLink) {
+      // Twitter/X needs intent:// for Android and special handling for iOS
+      const escapedUrl = url.replace(/"/g, '&quot;');
+      const jsEscapedUrl = url.replace(/"/g, '\\"').replace(/\\/g, '\\\\');
+
+      res.status(200).send(`<!DOCTYPE html>
+<html><head>
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head><body style="background:#0a0a14">
+<script>
+(function() {
+  var url = "${jsEscapedUrl}";
+  var ua = navigator.userAgent || '';
+  var isAndroid = /android/i.test(ua);
+  var isIOS = /iphone|ipad|ipod/i.test(ua);
+
+  if (isAndroid) {
+    // Android: Use intent to open Twitter app
+    var intentUrl = "intent://" + url.replace(/^https?:\\/\\//, "") + "#Intent;scheme=https;package=com.twitter.android;end";
+    window.location.href = intentUrl;
+    // Fallback after delay if app not installed
+    setTimeout(function() { window.location.href = url; }, 1500);
+  } else if (isIOS) {
+    // iOS: Try twitter:// scheme first, fallback to web
+    var twitterScheme = url.replace(/^https?:\\/\\/(www\\.)?(twitter\\.com|x\\.com)/, "twitter://");
+    window.location.href = twitterScheme;
+    setTimeout(function() { window.location.href = url; }, 1500);
+  } else {
+    // Desktop: Just redirect
+    window.location.replace(url);
+  }
+})();
+</script>
+<noscript><meta http-equiv="refresh" content="0;url=${escapedUrl}"></noscript>
+</body></html>`);
+    } else {
+      // Standard redirect for other links (Instagram, etc.)
+      res.status(200).send(`<!DOCTYPE html>
 <html><head>
 <meta name="robots" content="noindex,nofollow">
 <meta http-equiv="refresh" content="0;url=${url.replace(/"/g, '&quot;')}">
 <script>window.location.replace("${url.replace(/"/g, '\\"').replace(/\\/g, '\\\\')}");</script>
 </head><body style="background:#0a0a14"></body></html>`);
+    }
   } catch (e) {
     // Don't fail the redirect just because analytics failed
     // Try to redirect anyway if we have a valid URL (using JS redirect for security)
