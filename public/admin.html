@@ -263,6 +263,30 @@
         .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:14px 28px;border-radius:12px;font-weight:700;font-size:14px;box-shadow:0 10px 40px rgba(0,0,0,.4);transition:transform .3s cubic-bezier(.4,0,.2,1);z-index:2000}
         .toast.show{transform:translateX(-50%) translateY(0)}
 
+        /* Traffic Sources */
+        .source-item{display:flex;align-items:center;gap:14px;padding:16px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;margin-bottom:12px;transition:all .15s}
+        .source-item:hover{background:rgba(255,255,255,.05);border-color:rgba(102,126,234,.2)}
+        .source-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+        .source-icon.ig{background:linear-gradient(45deg,#F77737,#FD1D1D 50%,#833AB4)}
+        .source-icon.twitter{background:#1a1a1a}
+        .source-icon.tiktok{background:linear-gradient(135deg,#25F4EE,#000,#FD1D1D)}
+        .source-icon.snap{background:#FFFC00}
+        .source-icon.yt{background:#FF0000}
+        .source-icon.fb{background:#1877F2}
+        .source-icon.default{background:linear-gradient(135deg,#667eea,#764ba2)}
+        .source-info{flex:1;min-width:0}
+        .source-name-input{background:transparent;border:none;color:#fff;font-size:15px;font-weight:600;width:100%;padding:4px 0;outline:none;border-bottom:1px solid transparent;transition:border-color .2s}
+        .source-name-input:focus{border-bottom-color:#667eea}
+        .source-link{font-size:12px;color:#667eea;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+        .source-link:hover{text-decoration:underline}
+        .source-actions{display:flex;gap:8px}
+        .source-btn{padding:10px 16px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;border:none;display:flex;align-items:center;gap:6px}
+        .source-btn.copy{background:rgba(102,126,234,.15);color:#667eea}
+        .source-btn.copy:hover{background:rgba(102,126,234,.25)}
+        .source-btn.delete{background:rgba(255,71,87,.1);color:#ff4757}
+        .source-btn.delete:hover{background:rgba(255,71,87,.2)}
+        .no-sources{text-align:center;padding:40px;color:#666;font-size:14px}
+
         /* Responsive */
         @media(max-width:768px){
             .sidebar{width:70px}
@@ -321,6 +345,10 @@
                     <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
                     <span>Analytics</span>
                     <span class="nav-item-badge" id="navClicksBadge">0</span>
+                </div>
+                <div class="nav-item" onclick="showPage('sources')">
+                    <svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+                    <span>Traffic Sources</span>
                 </div>
             </div>
 
@@ -585,6 +613,46 @@
                 </div>
             </div>
         </section>
+
+        <!-- === TRAFFIC SOURCES PAGE === -->
+        <section id="pageSources" class="page-section">
+            <header class="content-header">
+                <div>
+                    <h1 class="content-title">Traffic Sources</h1>
+                    <p class="content-subtitle">Create tracking links for different platforms</p>
+                </div>
+                <div class="header-actions">
+                    <button class="header-btn primary" onclick="addNewSource()">+ Add Source</button>
+                </div>
+            </header>
+
+            <div class="content-body">
+                <div class="card">
+                    <div class="card-header" style="cursor:default">
+                        <div class="card-header-title"><span>🔗</span> Your Tracking Links</div>
+                    </div>
+                    <div class="card-body">
+                        <p style="color:#888;font-size:13px;margin-bottom:20px;">
+                            Add tracking sources below. Each source creates a unique link you can use on different platforms to track where your visitors come from.
+                        </p>
+                        <div id="sourcesList"></div>
+                        <button class="add-btn" onclick="addNewSource()">+ Add New Source</button>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top:20px">
+                    <div class="card-header" style="cursor:default">
+                        <div class="card-header-title"><span>💡</span> How It Works</div>
+                    </div>
+                    <div class="card-body" style="color:#888;font-size:13px;line-height:1.6;">
+                        <p style="margin-bottom:12px;"><strong style="color:#bbb">1. Create a source</strong> - Give it a name like "ig-main", "twitter1", "tiktok-bio"</p>
+                        <p style="margin-bottom:12px;"><strong style="color:#bbb">2. Copy the link</strong> - Click the copy button to get your tracking link</p>
+                        <p style="margin-bottom:12px;"><strong style="color:#bbb">3. Use it</strong> - Paste this link in your bio, posts, or wherever you share</p>
+                        <p><strong style="color:#bbb">4. Track results</strong> - See which sources bring the most clicks in Analytics</p>
+                    </div>
+                </div>
+            </div>
+        </section>
     </main>
 </div>
 
@@ -639,6 +707,8 @@ let isDirty = false;
 let currentTimeRange = '30d';
 let analyticsData = null;
 let clicksChart = null;
+let trafficSources = [];
+const SITE_URL = 'https://cmehere.net';
 
 // === NAVIGATION ===
 function showPage(page) {
@@ -652,6 +722,10 @@ function showPage(page) {
         document.getElementById('pageAnalytics').classList.add('active');
         document.querySelectorAll('.nav-item')[1].classList.add('active');
         loadAnalytics();
+    } else if (page === 'sources') {
+        document.getElementById('pageSources').classList.add('active');
+        document.querySelectorAll('.nav-item')[2].classList.add('active');
+        loadSources();
     }
 }
 
@@ -1410,6 +1484,143 @@ function showToast(msg) {
     toast.textContent = msg;
     toast.classList.add('show');
     setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+// === TRAFFIC SOURCES ===
+function loadSources() {
+    // Load from localStorage for now
+    const saved = localStorage.getItem('trafficSources');
+    trafficSources = saved ? JSON.parse(saved) : [];
+
+    // Add default sources if empty
+    if (trafficSources.length === 0) {
+        trafficSources = [
+            { id: 1, name: 'ig-main', icon: 'ig' },
+            { id: 2, name: 'ig-2', icon: 'ig' },
+            { id: 3, name: 'twitter-main', icon: 'twitter' },
+            { id: 4, name: 'tiktok-bio', icon: 'tiktok' }
+        ];
+        saveSources();
+    }
+
+    renderSources();
+}
+
+function saveSources() {
+    localStorage.setItem('trafficSources', JSON.stringify(trafficSources));
+}
+
+function renderSources() {
+    const container = document.getElementById('sourcesList');
+
+    if (trafficSources.length === 0) {
+        container.innerHTML = '<div class="no-sources">No sources yet. Click "Add Source" to create your first tracking link.</div>';
+        return;
+    }
+
+    container.innerHTML = trafficSources.map(source => {
+        const link = `${SITE_URL}?src=${encodeURIComponent(source.name)}`;
+        return `
+            <div class="source-item" data-id="${source.id}">
+                <div class="source-icon ${source.icon}">${getSourceEmoji(source.icon)}</div>
+                <div class="source-info">
+                    <input type="text" class="source-name-input" value="${escapeHtml(source.name)}"
+                           onchange="updateSourceName(${source.id}, this.value)"
+                           placeholder="Source name...">
+                    <div class="source-link" onclick="copySourceLink('${link}')">${link}</div>
+                </div>
+                <div class="source-actions">
+                    <button class="source-btn copy" onclick="copySourceLink('${link}')">📋 Copy</button>
+                    <button class="source-btn delete" onclick="deleteSource(${source.id})">🗑️</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function getSourceEmoji(icon) {
+    const emojis = {
+        'ig': '📸',
+        'twitter': '🐦',
+        'tiktok': '🎵',
+        'snap': '👻',
+        'yt': '📺',
+        'fb': '📘',
+        'default': '🔗'
+    };
+    return emojis[icon] || emojis.default;
+}
+
+function getIconFromName(name) {
+    name = name.toLowerCase();
+    if (name.includes('ig') || name.includes('instagram')) return 'ig';
+    if (name.includes('twitter') || name.includes('tw') || name.includes('x-')) return 'twitter';
+    if (name.includes('tiktok') || name.includes('tt')) return 'tiktok';
+    if (name.includes('snap')) return 'snap';
+    if (name.includes('youtube') || name.includes('yt')) return 'yt';
+    if (name.includes('facebook') || name.includes('fb')) return 'fb';
+    return 'default';
+}
+
+function addNewSource() {
+    const id = Date.now();
+    const count = trafficSources.length + 1;
+    trafficSources.push({
+        id: id,
+        name: `source-${count}`,
+        icon: 'default'
+    });
+    saveSources();
+    renderSources();
+
+    // Focus on the new input
+    setTimeout(() => {
+        const inputs = document.querySelectorAll('.source-name-input');
+        if (inputs.length > 0) {
+            inputs[inputs.length - 1].focus();
+            inputs[inputs.length - 1].select();
+        }
+    }, 100);
+}
+
+function updateSourceName(id, newName) {
+    const source = trafficSources.find(s => s.id === id);
+    if (source) {
+        // Clean the name - only allow alphanumeric, dash, underscore
+        source.name = newName.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 30) || 'source';
+        source.icon = getIconFromName(source.name);
+        saveSources();
+        renderSources();
+    }
+}
+
+function deleteSource(id) {
+    if (confirm('Delete this tracking source?')) {
+        trafficSources = trafficSources.filter(s => s.id !== id);
+        saveSources();
+        renderSources();
+    }
+}
+
+function copySourceLink(link) {
+    navigator.clipboard.writeText(link).then(() => {
+        showToast('Link copied! 📋');
+    }).catch(() => {
+        // Fallback
+        const input = document.createElement('input');
+        input.value = link;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        showToast('Link copied! 📋');
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // === INIT ===
