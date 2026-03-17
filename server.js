@@ -894,6 +894,34 @@ app.get('/api/analytics/stats', requireAuth, async (req, res) => {
   }
 });
 
+// ═══ LIVE FEED: Real-time analytics (polling) ═══
+app.get('/api/analytics/live', requireAuth, async (req, res) => {
+  try {
+    const since = req.query.since || new Date(Date.now() - 60000).toISOString(); // Last minute default
+
+    const result = await pool.query(`
+      SELECT id, link_type, link_title, country, country_code, device, browser, os, source, clicked_at
+      FROM analytics
+      WHERE clicked_at > $1
+      ORDER BY clicked_at DESC
+      LIMIT 50
+    `, [since]);
+
+    // Get latest click timestamp for next poll
+    const latestTimestamp = result.rows.length > 0
+      ? result.rows[0].clicked_at
+      : since;
+
+    res.json({
+      clicks: result.rows,
+      latest: latestTimestamp,
+      count: result.rows.length
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ═══ DEBUG: Check analytics table ═══
 app.get('/api/analytics/debug', requireAuth, async (req, res) => {
   try {

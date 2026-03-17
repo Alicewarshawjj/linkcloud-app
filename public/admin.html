@@ -215,6 +215,12 @@
         .feed-type.social{background:rgba(102,126,234,.15);color:#667eea}
         .feed-type.featured{background:rgba(118,75,162,.15);color:#a855f7}
         .feed-type.carousel{background:rgba(249,115,22,.15);color:#f97316}
+        .feed-source{background:rgba(34,197,94,.15);color:#22c55e;padding:2px 6px;border-radius:4px;font-size:10px}
+        .feed-item-new{animation:slideIn .4s ease-out;background:rgba(102,126,234,.08)!important;border-left:3px solid #667eea}
+        @keyframes slideIn{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
+        .live-indicator{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#22c55e}
+        .live-dot{width:8px;height:8px;background:#22c55e;border-radius:50%;animation:pulse 2s infinite}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
         /* Top Links */
         .top-link-item{display:flex;align-items:center;gap:14px;padding:14px;background:rgba(255,255,255,.02);border-radius:12px;margin-bottom:10px}
@@ -615,6 +621,7 @@
                 <div class="analytics-card" style="margin-top:20px">
                     <div class="analytics-card-header">
                         <div class="analytics-card-title"><span>⚡</span> Live Feed</div>
+                        <div class="live-indicator"><span class="live-dot"></span> LIVE</div>
                     </div>
                     <div class="live-feed" id="liveFeedContent">
                         <div class="spinner"></div>
@@ -724,6 +731,9 @@ function showPage(page) {
     document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
+    // Stop live polling when leaving analytics
+    stopLivePolling();
+
     if (page === 'editor') {
         document.getElementById('pageEditor').classList.add('active');
         document.querySelectorAll('.nav-item')[0].classList.add('active');
@@ -731,6 +741,8 @@ function showPage(page) {
         document.getElementById('pageAnalytics').classList.add('active');
         document.querySelectorAll('.nav-item')[1].classList.add('active');
         loadAnalytics();
+        // Start live polling for real-time updates
+        startLivePolling();
     } else if (page === 'sources') {
         document.getElementById('pageSources').classList.add('active');
         document.querySelectorAll('.nav-item')[2].classList.add('active');
@@ -1034,29 +1046,39 @@ function renderDevices(devices, browsers, os) {
     container.innerHTML = html;
 }
 
-function renderLiveFeed(recent) {
+// Live feed state
+let livePollingInterval = null;
+let lastClickTimestamp = null;
+let seenClickIds = new Set();
+
+function renderLiveFeed(recent, isUpdate = false) {
     const container = document.getElementById('liveFeedContent');
 
-    if (!recent.length) {
+    if (!recent.length && !isUpdate) {
         container.innerHTML = `<div class="empty-state"><div class="icon">⚡</div><h4>No clicks yet</h4><p>Recent clicks will appear here</p></div>`;
         return;
     }
 
     let html = '';
-    recent.forEach(click => {
+    recent.forEach((click, index) => {
         const flag = FLAGS[click.country_code] || FLAGS[click.country] || '🌍';
         const typeClass = click.link_type || 'social';
-        const time = new Date(click.clicked_at).toLocaleString();
         const title = click.link_title || click.link_url || 'Link';
+        const isNew = isUpdate && !seenClickIds.has(click.id);
+        const sourceTag = click.source ? `<span class="feed-source">${click.source}</span>` : '';
+
+        // Track seen IDs
+        if (click.id) seenClickIds.add(click.id);
 
         html += `
-            <div class="feed-item">
+            <div class="feed-item ${isNew ? 'feed-item-new' : ''}">
                 <div class="feed-flag">${flag}</div>
                 <div class="feed-info">
                     <div class="feed-title">${title}</div>
                     <div class="feed-meta">
                         <span>📍 ${click.country || 'Unknown'}</span>
                         <span>📱 ${click.device || 'Unknown'}</span>
+                        ${sourceTag}
                     </div>
                 </div>
                 <div class="feed-time">${timeAgo(click.clicked_at)}</div>
@@ -1064,7 +1086,51 @@ function renderLiveFeed(recent) {
             </div>`;
     });
 
-    container.innerHTML = html;
+    if (isUpdate && recent.length > 0) {
+        // Prepend new clicks with animation
+        container.insertAdjacentHTML('afterbegin', html);
+        // Keep only last 20 items
+        while (container.children.length > 20) {
+            container.removeChild(container.lastChild);
+        }
+    } else {
+        container.innerHTML = html || `<div class="empty-state"><div class="icon">⚡</div><h4>Waiting for clicks...</h4><p>New clicks will appear here in real-time</p></div>`;
+    }
+}
+
+async function pollLiveFeed() {
+    try {
+        const since = lastClickTimestamp || new Date(Date.now() - 60000).toISOString();
+        const res = await fetch(`/api/analytics/live?since=${encodeURIComponent(since)}`, {credentials:'same-origin'});
+        if (!res.ok) return;
+
+        const data = await res.json();
+        if (data.clicks && data.clicks.length > 0) {
+            // Update timestamp for next poll
+            lastClickTimestamp = data.latest;
+            // Render new clicks
+            renderLiveFeed(data.clicks, true);
+            // Update badge
+            loadAnalyticsBadge();
+        }
+    } catch (e) {
+        console.error('Live poll error:', e);
+    }
+}
+
+function startLivePolling() {
+    if (livePollingInterval) return;
+    // Poll every 5 seconds
+    livePollingInterval = setInterval(pollLiveFeed, 5000);
+    // Also poll immediately
+    pollLiveFeed();
+}
+
+function stopLivePolling() {
+    if (livePollingInterval) {
+        clearInterval(livePollingInterval);
+        livePollingInterval = null;
+    }
 }
 
 function renderTopLinks(links) {
