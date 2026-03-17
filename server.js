@@ -910,6 +910,86 @@ app.get('/api/analytics/stats', requireAuth, async (req, res) => {
   }
 });
 
+// ═══ DEBUG: Check analytics table ═══
+app.get('/api/analytics/debug', requireAuth, async (req, res) => {
+  try {
+    const count = await pool.query('SELECT COUNT(*) FROM analytics');
+    const sample = await pool.query('SELECT * FROM analytics ORDER BY clicked_at DESC LIMIT 5');
+    const columns = await pool.query(`
+      SELECT column_name, data_type
+      FROM information_schema.columns
+      WHERE table_name = 'analytics'
+    `);
+    res.json({
+      total_rows: parseInt(count.rows[0].count),
+      columns: columns.rows,
+      sample_data: sample.rows
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ═══ RESET: Clear and rebuild analytics table ═══
+app.post('/api/analytics/reset', requireAuth, async (req, res) => {
+  try {
+    // Drop and recreate
+    await pool.query('DROP TABLE IF EXISTS analytics');
+    await pool.query(`
+      CREATE TABLE analytics (
+        id SERIAL PRIMARY KEY,
+        slug VARCHAR(100) NOT NULL DEFAULT 'main',
+        link_type VARCHAR(50) NOT NULL,
+        link_id VARCHAR(100),
+        link_title TEXT,
+        user_agent TEXT,
+        ip_address VARCHAR(45),
+        country VARCHAR(100),
+        country_code VARCHAR(5),
+        os VARCHAR(50),
+        browser VARCHAR(50),
+        device VARCHAR(20),
+        referrer TEXT,
+        clicked_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query('CREATE INDEX idx_analytics_slug ON analytics(slug)');
+    await pool.query('CREATE INDEX idx_analytics_clicked_at ON analytics(clicked_at DESC)');
+    await pool.query('CREATE INDEX idx_analytics_country ON analytics(country)');
+
+    res.json({ success: true, message: 'Analytics table reset successfully' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ═══ TEST: Insert test click ═══
+app.post('/api/analytics/test-click', requireAuth, async (req, res) => {
+  try {
+    // Get real IP info
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '8.8.8.8';
+    const geoInfo = geoip.lookup(ip.replace('::ffff:', ''));
+
+    await pool.query(
+      `INSERT INTO analytics (slug, link_type, link_id, link_title, user_agent, ip_address, country, country_code, os, browser, device, referrer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      ['main', 'test', 'test-123', 'Test Link', req.headers['user-agent'] || 'Test', ip,
+       geoInfo?.name || 'Test Country', geoInfo?.country || 'XX',
+       'iOS', 'Safari', 'Mobile', 'direct']
+    );
+
+    const count = await pool.query('SELECT COUNT(*) FROM analytics');
+    res.json({
+      success: true,
+      total_clicks: parseInt(count.rows[0].count),
+      detected_ip: ip,
+      detected_country: geoInfo?.name || 'Unknown'
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ═══ HONEYPOT TRAPS - Block bots that follow hidden links ═══
 // Track IPs that hit honeypots for blocking
 const honeypotHits = new Map();
