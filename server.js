@@ -1415,8 +1415,16 @@ a{color:#fff;margin-top:20px}
   var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
   var isAndroid=/Android/i.test(navigator.userAgent);
   if(isIOS){
-    setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},100);
-    setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},200);
+    var methods=[
+      function(){window.location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},
+      function(){var s=url.replace(/^https?:\\/\\//,'');window.location.href='x-safari-https://'+s},
+      function(){var w=window.open('about:blank','_blank');if(w){setTimeout(function(){w.location.href=url},100)}},
+      function(){var a=document.createElement('a');a.href=url;a.target='_system';a.click()},
+      function(){window.open(url,'_system')}
+    ];
+    var i=0;
+    function tryNext(){if(i<methods.length){try{methods[i]()}catch(e){}i++;setTimeout(tryNext,400)}}
+    tryNext();
   }else if(isAndroid){
     location.href='intent://'+location.hostname+'/?browser=1#Intent;scheme=https;package=com.android.chrome;end';
   }else{
