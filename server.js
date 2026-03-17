@@ -1571,44 +1571,11 @@ a{color:#fff;margin-top:20px}
 });
 
 // ═══ FACEBOOK DEDICATED ROUTE ═══
-// Facebook uses WKWebView which blocks URL schemes. Try multiple methods.
+// Facebook uses WKWebView. Using pure 302 redirect like juicy.bio does.
 app.get('/facebook', (req, res) => {
-  if (req.query.browser === '1') {
-    return res.redirect('/');
-  }
-
-  const ua = req.headers['user-agent'] || '';
-  const isIOS = /iPhone|iPad|iPod/i.test(ua);
-  const isAndroid = /Android/i.test(ua);
-
-  if (isAndroid) {
-    // Android: intent scheme works
-    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-<script>window.location.href='intent://cmehere.net/?browser=1#Intent;scheme=https;package=com.android.chrome;end';</script>
-</head><body></body></html>`);
-    return;
-  }
-
-  // iOS Facebook: Try multiple approaches
-  res.send(`<!DOCTYPE html>
-<html><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Open in Safari</title>
-</head>
-<body style="margin:0;padding:20px;font-family:-apple-system,sans-serif;background:#000;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
-<div style="font-size:60px;margin-bottom:20px">📱</div>
-<h2 style="margin:0 0 10px">Open in Safari</h2>
-<p style="opacity:0.7;margin:0 0 30px">Tap the button below</p>
-<a href="https://cmehere.net/?browser=1"
-   target="_blank"
-   rel="noopener noreferrer"
-   style="display:block;width:100%;max-width:280px;padding:16px 24px;background:#0095f6;color:#fff;text-decoration:none;border-radius:12px;font-size:17px;font-weight:600"
-   onclick="setTimeout(function(){window.location.href='https://cmehere.net/?browser=1'},100)">
-   Open in Safari
-</a>
-<p style="margin-top:30px;font-size:13px;opacity:0.5">Or tap <strong>⋯</strong> at top right → "Open in Browser"</p>
-</body></html>`);
+  // Pure server-side 302 redirect - no HTML, no JavaScript
+  // This is how juicy.bio successfully escapes Facebook's in-app browser
+  res.redirect(302, 'https://cmehere.net/?source=facebook');
 });
 
 // ═══ TRAFFIC SOURCE ROUTE (Clean URLs: /ig-main, /twitter1, etc.) ═══
