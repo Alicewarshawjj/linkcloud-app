@@ -1378,14 +1378,16 @@ app.get('/go/:encodedLink', async (req, res) => {
 
       if (isFacebookiOS) {
         // Facebook iOS: WKWebView blocks external URLs
-        // Show a clean page with a button to copy/open the link
+        // Try multiple methods to escape - user tap triggers all attempts
         const escapedUrl = url.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        const jsUrl = url.replace(/"/g, '\\"').replace(/\\/g, '\\\\');
+        const strippedUrl = url.replace(/^https?:\/\//, '');
         res.status(200).send(`<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>Open Link</title>
+<title>Opening...</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
@@ -1405,21 +1407,51 @@ h2{font-size:20px;margin-bottom:8px}
 <div class="icon">🔗</div>
 <h2>${safeTitle || 'External Link'}</h2>
 <p class="subtitle">Tap to open this link</p>
-<a class="btn" href="${escapedUrl}" target="_blank" rel="noopener">Open Link →</a>
+<button class="btn" id="openBtn" onclick="tryOpen()">Open Link →</button>
 <button class="btn btn-secondary" onclick="copyLink()">Copy Link</button>
 <p class="hint">If the button doesn't work:<br>Tap <strong>⋯</strong> → <strong>Open in Safari</strong></p>
 </div>
 <script>
+var targetUrl = "${jsUrl}";
+var strippedUrl = "${strippedUrl}";
+
+function tryOpen() {
+  // Method 1: Try x-safari-https (works in some WebViews)
+  var xSafari = 'x-safari-https://' + strippedUrl;
+
+  // Method 2: Create a hidden link and click it
+  var link = document.createElement('a');
+  link.href = targetUrl;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+
+  // Method 3: window.open
+  var win = window.open(targetUrl, '_blank');
+
+  // Method 4: Try x-safari after a delay
+  setTimeout(function() {
+    window.location.href = xSafari;
+  }, 100);
+
+  // Method 5: Direct location as final fallback
+  setTimeout(function() {
+    window.location.href = targetUrl;
+  }, 500);
+
+  // Click the hidden link
+  document.body.appendChild(link);
+  link.click();
+}
+
 function copyLink(){
-  var url="${url.replace(/"/g, '\\"').replace(/\\/g, '\\\\')}";
   if(navigator.clipboard&&navigator.clipboard.writeText){
-    navigator.clipboard.writeText(url).then(function(){
+    navigator.clipboard.writeText(targetUrl).then(function(){
       var btn=document.querySelector('.btn-secondary');
       btn.textContent='Copied! ✓';
       btn.classList.add('copied');
     });
   }else{
-    prompt('Copy this link:',url);
+    prompt('Copy this link:',targetUrl);
   }
 }
 </script>
