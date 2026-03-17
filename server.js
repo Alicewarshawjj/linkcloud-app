@@ -1571,11 +1571,103 @@ a{color:#fff;margin-top:20px}
 });
 
 // ═══ FACEBOOK DEDICATED ROUTE ═══
-// Facebook uses WKWebView. Using pure 302 redirect like juicy.bio does.
+// Testing 10 different methods to escape Facebook's WKWebView
 app.get('/facebook', (req, res) => {
-  // Pure server-side 302 redirect - no HTML, no JavaScript
-  // This is how juicy.bio successfully escapes Facebook's in-app browser
-  res.redirect(302, 'https://cmehere.net/?source=facebook');
+  const method = parseInt(req.query.m) || 1;
+  const ua = req.headers['user-agent'] || '';
+
+  switch(method) {
+    case 1:
+      // Method 1: Meta refresh redirect
+      res.send(`<!DOCTYPE html><html><head>
+<meta http-equiv="refresh" content="0;url=https://cmehere.net/?source=fb1">
+</head><body></body></html>`);
+      break;
+
+    case 2:
+      // Method 2: JavaScript location.replace
+      res.send(`<!DOCTYPE html><html><head><script>
+location.replace('https://cmehere.net/?source=fb2');
+</script></head><body></body></html>`);
+      break;
+
+    case 3:
+      // Method 3: Deep link with googlechrome scheme
+      res.send(`<!DOCTYPE html><html><head><script>
+window.location.href='googlechrome://cmehere.net/?source=fb3';
+setTimeout(function(){window.location.href='https://cmehere.net/?source=fb3'},500);
+</script></head><body></body></html>`);
+      break;
+
+    case 4:
+      // Method 4: Universal Links format (apple-app-site-association style)
+      res.send(`<!DOCTYPE html><html><head><script>
+window.location.href='https://cmehere.net/?source=fb4&openExternalBrowser=1';
+</script></head><body></body></html>`);
+      break;
+
+    case 5:
+      // Method 5: Form POST redirect
+      res.send(`<!DOCTYPE html><html><head></head><body>
+<form id="f" method="GET" action="https://cmehere.net/" target="_top">
+<input type="hidden" name="source" value="fb5">
+</form>
+<script>document.getElementById('f').submit();</script>
+</body></html>`);
+      break;
+
+    case 6:
+      // Method 6: iframe with sandbox escape
+      res.send(`<!DOCTYPE html><html><head></head><body>
+<script>
+var w=window.open('https://cmehere.net/?source=fb6','_system');
+if(!w)window.location.href='https://cmehere.net/?source=fb6';
+</script></body></html>`);
+      break;
+
+    case 7:
+      // Method 7: Blob URL redirect
+      res.send(`<!DOCTYPE html><html><head><script>
+var html='<script>window.location.href="https://cmehere.net/?source=fb7";<\\/script>';
+var blob=new Blob([html],{type:'text/html'});
+var url=URL.createObjectURL(blob);
+window.open(url,'_self');
+</script></head><body></body></html>`);
+      break;
+
+    case 8:
+      // Method 8: History API manipulation
+      res.send(`<!DOCTYPE html><html><head><script>
+history.replaceState(null,null,'https://cmehere.net/?source=fb8');
+window.location.reload();
+</script></head><body></body></html>`);
+      break;
+
+    case 9:
+      // Method 9: Service worker registration attempt
+      res.send(`<!DOCTYPE html><html><head><script>
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sw.js').catch(function(){});
+}
+window.top.location.href='https://cmehere.net/?source=fb9';
+</script></head><body></body></html>`);
+      break;
+
+    case 10:
+      // Method 10: Click simulation with anchor
+      res.send(`<!DOCTYPE html><html><head></head><body>
+<a id="link" href="https://cmehere.net/?source=fb10" rel="noreferrer noopener external">.</a>
+<script>
+var link=document.getElementById('link');
+var evt=new MouseEvent('click',{view:window,bubbles:true,cancelable:true});
+link.dispatchEvent(evt);
+</script></body></html>`);
+      break;
+
+    default:
+      // Default: 301 permanent redirect
+      res.redirect(301, 'https://cmehere.net/?source=fb0');
+  }
 });
 
 // ═══ TRAFFIC SOURCE ROUTE (Clean URLs: /ig-main, /twitter1, etc.) ═══
