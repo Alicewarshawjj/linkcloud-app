@@ -1428,6 +1428,58 @@ a{color:#fff;margin-top:20px}
 });
 
 // ═══ TRAFFIC SOURCE ROUTE (Clean URLs: /ig-main, /twitter1, etc.) ═══
+// Maps custom source URLs to their platform-specific escape logic
+const SOURCE_PLATFORM_MAP = {
+  // Reddit sources - use auto-open escape
+  'seemorer': 'reddit',
+  'rd': 'reddit',
+  // Threads sources - use auto-open escape
+  'th': 'threads',
+  // Snapchat sources - use auto-open escape
+  'seemoresc': 'snapchat',
+  'sc': 'snapchat',
+  // Facebook sources - use auto-open escape
+  'fb': 'facebook',
+  'seemorefb': 'facebook'
+};
+
+// Auto-open escape page generator (works for Reddit, Threads, Snapchat, etc.)
+function generateAutoOpenPage(source) {
+  return `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opening...</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#000;color:#fff}
+.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+p{margin-top:20px;opacity:0.7}
+a{color:#fff;margin-top:20px}
+</style>
+</head><body>
+<div class="spinner"></div>
+<p>Opening in browser...</p>
+<a href="/${source}?browser=1">Tap here if nothing happens</a>
+<script>
+(function(){
+  var source='${source}';
+  var url='https://'+location.hostname+'/'+source+'?browser=1';
+  var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var isAndroid=/Android/i.test(navigator.userAgent);
+  if(isIOS){
+    setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},100);
+    setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},200);
+  }else if(isAndroid){
+    location.href='intent://'+location.hostname+'/'+source+'?browser=1#Intent;scheme=https;package=com.android.chrome;end';
+  }else{
+    location.href=url;
+  }
+})();
+</script>
+</body></html>`;
+}
+
 app.get('/:source', async (req, res, next) => {
   // Skip if it's a known route
   const knownRoutes = ['admin', 'go', 'api', 'favicon.ico', 'robots.txt'];
@@ -1442,6 +1494,17 @@ app.get('/:source', async (req, res, next) => {
   const cleanSource = source.slice(0, 50).replace(/[^a-zA-Z0-9_-]/g, '');
   if (!cleanSource || cleanSource !== source) {
     return next(); // Invalid source, pass to 404
+  }
+
+  // Check if this source needs platform-specific escape logic
+  const platform = SOURCE_PLATFORM_MAP[cleanSource.toLowerCase()];
+
+  // If browser=1 param present, show normal page (already escaped)
+  if (req.query.browser === '1') {
+    // Continue to render normal page below
+  } else if (platform) {
+    // This source needs auto-open escape - show escape page
+    return res.send(generateAutoOpenPage(cleanSource));
   }
 
   try {
