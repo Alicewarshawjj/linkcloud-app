@@ -1126,6 +1126,7 @@ app.get('/go/:encodedLink', async (req, res) => {
 
     // Check if it's a Twitter/X link - needs special handling to open in app
     const isTwitterLink = url.includes('twitter.com') || url.includes('x.com');
+    console.log('🔗 Redirect:', url, '| Twitter:', isTwitterLink);
 
     if (isTwitterLink) {
       // Twitter/X needs intent:// for Android and special handling for iOS
