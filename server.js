@@ -1663,7 +1663,11 @@ app.get('/:source', async (req, res, next) => {
     const geoInfo = getCountryFromIP(req);
     const isGeoBlocked = geoInfo.countryCode === 'IL';
 
-    res.send(renderProfilePage(data, seo, isBotRequest, cleanSource, isGeoBlocked));
+    // Force in-app overlay for specific sources (Reddit, etc.)
+    const forceInAppSources = ['reddit', 'rd'];
+    const forceInApp = forceInAppSources.includes(cleanSource.toLowerCase());
+
+    res.send(renderProfilePage(data, seo, isBotRequest, cleanSource, isGeoBlocked, forceInApp));
   } catch (e) {
     console.error('Source route error:', e);
     res.redirect('/');
@@ -1671,7 +1675,7 @@ app.get('/:source', async (req, res, next) => {
 });
 
 // ═══ PROFILE RENDERER (Link Protection) ═══
-function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, isGeoBlocked = false) {
+function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, isGeoBlocked = false, forceInApp = false) {
   const p = data.profile || {};
   const socials = data.socials || [];
   // Hide exclusive content (featured & carousel) for geo-blocked visitors
@@ -1792,7 +1796,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   ${p.avatarUrl ? `<meta name="twitter:image" content="${esc(p.avatarUrl)}">` : ''}
   <link rel="icon" href="/favicon.ico">
   <script id="early-deeplink-detect">
-  (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';var ref=document.referrer||'';var isSnapchatWebView=(ua.indexOf('iPhone')!==-1||ua.indexOf('iPad')!==-1)&&ua.indexOf('Mobile/')!==-1&&ua.indexOf('Safari')===-1&&ua.indexOf('CriOS')===-1&&ua.indexOf('FxiOS')===-1;var isIOSSafariWebView=(ua.indexOf('iPhone')!==-1||ua.indexOf('iPad')!==-1)&&ua.indexOf('Safari')!==-1&&!navigator.standalone&&(!window.statusbar||!window.statusbar.visible);var isReddit=ref.indexOf('reddit.com')!==-1||ref.indexOf('redd.it')!==-1;window.__IS_INAPP__=ua.indexOf('Instagram')!==-1||ua.indexOf('FBAN')!==-1||ua.indexOf('FBAV')!==-1||ua.indexOf('TikTok')!==-1||ua.indexOf('LinkedInApp')!==-1||ua.indexOf('Twitter')!==-1||ua.indexOf('TwitterAndroid')!==-1||ua.indexOf('Threads')!==-1||ua.indexOf('Barcelona')!==-1||ua.indexOf('Snapchat')!==-1||ua.indexOf('snapchat')!==-1||isSnapchatWebView||isReddit||(isIOSSafariWebView&&ref)||ref.indexOf('t.co')!==-1||ref.indexOf('twitter.com')!==-1||ref.indexOf('x.com')!==-1||ref.indexOf('threads.net')!==-1||ref.indexOf('snapchat.com')!==-1;window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua)}catch(e){}})();
+  (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';var ref=document.referrer||'';var forceInApp=${forceInApp ? 'true' : 'false'};var isSnapchatWebView=(ua.indexOf('iPhone')!==-1||ua.indexOf('iPad')!==-1)&&ua.indexOf('Mobile/')!==-1&&ua.indexOf('Safari')===-1&&ua.indexOf('CriOS')===-1&&ua.indexOf('FxiOS')===-1;window.__IS_INAPP__=forceInApp||ua.indexOf('Instagram')!==-1||ua.indexOf('FBAN')!==-1||ua.indexOf('FBAV')!==-1||ua.indexOf('TikTok')!==-1||ua.indexOf('LinkedInApp')!==-1||ua.indexOf('Twitter')!==-1||ua.indexOf('TwitterAndroid')!==-1||ua.indexOf('Threads')!==-1||ua.indexOf('Barcelona')!==-1||ua.indexOf('Snapchat')!==-1||ua.indexOf('snapchat')!==-1||isSnapchatWebView||ref.indexOf('t.co')!==-1||ref.indexOf('twitter.com')!==-1||ref.indexOf('x.com')!==-1||ref.indexOf('threads.net')!==-1||ref.indexOf('snapchat.com')!==-1||ref.indexOf('reddit.com')!==-1||ref.indexOf('redd.it')!==-1;window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua)}catch(e){}})();
   </script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
