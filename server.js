@@ -759,9 +759,9 @@ app.post('/api/analytics/click', analyticsLimiter, async (req, res) => {
 
     // SECURITY: Do NOT store link_url - it could leak protected URLs
     await pool.query(
-      `INSERT INTO analytics (slug, link_type, link_id, link_title, user_agent, ip_address, country, country_code, os, browser, device, referrer)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      ['main', link_type, safe_link_id, safe_link_title, user_agent, geoInfo.ip, geoInfo.country, geoInfo.countryCode, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
+      `INSERT INTO analytics (slug, source, link_type, link_id, link_title, user_agent, ip_address, country, country_code, os, browser, device, referrer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      ['main', null, link_type, safe_link_id, safe_link_title, user_agent, geoInfo.ip, geoInfo.country, geoInfo.countryCode, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
     );
 
     res.json({ ok: true });
@@ -923,6 +923,7 @@ app.post('/api/analytics/reset', requireAuth, async (req, res) => {
       CREATE TABLE analytics (
         id SERIAL PRIMARY KEY,
         slug VARCHAR(100) NOT NULL DEFAULT 'main',
+        source VARCHAR(50),
         link_type VARCHAR(50) NOT NULL,
         link_id VARCHAR(100),
         link_title TEXT,
@@ -940,6 +941,7 @@ app.post('/api/analytics/reset', requireAuth, async (req, res) => {
     await pool.query('CREATE INDEX idx_analytics_slug ON analytics(slug)');
     await pool.query('CREATE INDEX idx_analytics_clicked_at ON analytics(clicked_at DESC)');
     await pool.query('CREATE INDEX idx_analytics_country ON analytics(country)');
+    await pool.query('CREATE INDEX idx_analytics_source ON analytics(source)');
 
     res.json({ success: true, message: 'Analytics table reset successfully' });
   } catch (e) {
@@ -956,9 +958,9 @@ app.post('/api/analytics/test-click', requireAuth, async (req, res) => {
     const geoInfo = getCountryFromIP(req);
 
     await pool.query(
-      `INSERT INTO analytics (slug, link_type, link_id, link_title, user_agent, ip_address, country, country_code, os, browser, device, referrer)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      ['main', 'test', 'test-' + Date.now(), 'Test Link', ua, geoInfo.ip,
+      `INSERT INTO analytics (slug, source, link_type, link_id, link_title, user_agent, ip_address, country, country_code, os, browser, device, referrer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      ['main', 'test-click', 'test', 'test-' + Date.now(), 'Test Link', ua, geoInfo.ip,
        geoInfo.country, geoInfo.countryCode,
        deviceInfo.os, deviceInfo.browser, deviceInfo.device, 'test']
     );
