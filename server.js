@@ -74,7 +74,9 @@ async function initDB() {
       'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS city VARCHAR(100)',
       'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS os VARCHAR(50)',
       'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS browser VARCHAR(50)',
-      'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS device VARCHAR(20)'
+      'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS device VARCHAR(20)',
+      'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS link_title TEXT',
+      'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS link_id VARCHAR(100)'
     ];
 
     for (const migration of migrations) {
@@ -981,7 +983,14 @@ app.get('/go/:encodedLink', async (req, res) => {
     // Redirect to actual URL (only decoded server-side)
     res.redirect(302, url);
   } catch (e) {
-    console.error('Redirect error:', e.message);
+    console.error('🔗 REDIRECT ERROR:', e.message, e.stack?.slice(0, 300));
+    // Don't fail the redirect just because analytics failed
+    // Try to redirect anyway if we have a valid URL
+    const url = decodeLink(req.params.encodedLink);
+    if (url && url.startsWith('http')) {
+      console.log('🔗 Redirecting despite analytics error to:', url.slice(0, 50));
+      return res.redirect(302, url);
+    }
     res.status(404).send('Link not found');
   }
 });
