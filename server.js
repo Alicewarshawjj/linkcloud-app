@@ -1470,11 +1470,53 @@ app.get('/', async (req, res) => {
       return res.status(200).send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="2"><title>Loading...</title></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0a14;color:#fff;font-family:system-ui"><div style="text-align:center"><div style="font-size:48px;margin-bottom:16px">⏳</div><h1>Starting up...</h1><p style="color:#888">Please wait a moment</p></div></body></html>`);
     }
 
+    const userAgent = req.headers['user-agent'] || '';
+
+    // ═══ FACEBOOK SPECIAL HANDLING ═══
+    // Facebook WKWebView blocks URL schemes, so the blur overlay doesn't work
+    // Instead, show a clean landing page with a direct button (no blur)
+    const isFacebookiOS = /FBAN|FBAV/i.test(userAgent) && /iPhone|iPad|iPod/i.test(userAgent);
+    const isFacebookAndroid = /FBAN|FBAV/i.test(userAgent) && /Android/i.test(userAgent);
+
+    if (isFacebookiOS && req.query.noblur !== '1') {
+      // Facebook iOS: Show clean landing page WITHOUT blur overlay
+      return res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>cmehere.net</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;padding-bottom:env(safe-area-inset-bottom)}
+.logo{font-size:56px;margin-bottom:28px}
+h1{font-size:32px;font-weight:700;margin-bottom:12px}
+.subtitle{color:#888;font-size:16px;margin-bottom:48px}
+.cta{display:block;width:100%;max-width:320px;background:linear-gradient(135deg,#00c6ff 0%,#0072ff 100%);color:#fff;text-decoration:none;padding:20px 36px;border-radius:16px;font-size:19px;font-weight:600;text-align:center;box-shadow:0 8px 32px rgba(0,114,255,0.4);transition:transform 0.15s,box-shadow 0.15s}
+.cta:active{transform:scale(0.97);box-shadow:0 4px 16px rgba(0,114,255,0.3)}
+.hint{margin-top:32px;font-size:13px;color:#666;text-align:center;line-height:1.6}
+.hint strong{color:#888}
+</style>
+</head>
+<body>
+<div class="logo">🔗</div>
+<h1>cmehere.net</h1>
+<p class="subtitle">Tap to continue</p>
+<a class="cta" href="https://cmehere.net/?noblur=1">Open Site →</a>
+<p class="hint">If nothing happens, tap <strong>⋯</strong> above<br>then <strong>"Open in Safari"</strong></p>
+</body></html>`);
+    }
+
+    if (isFacebookAndroid) {
+      // Facebook Android: Use intent scheme
+      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<script>window.location.href='intent://cmehere.net/?noblur=1#Intent;scheme=https;package=com.android.chrome;end';</script>
+</head><body></body></html>`);
+    }
+
     const result = await pool.query('SELECT content, seo FROM sites WHERE slug = $1', ['main']);
     if (result.rows.length === 0) return res.redirect('/admin');
     const data = result.rows[0].content;
     const seo = result.rows[0].seo || {};
-    const userAgent = req.headers['user-agent'] || '';
 
     // Bot detection
     const isBotRequest = isBot(userAgent, req);
