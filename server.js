@@ -1279,10 +1279,11 @@ app.get('/', async (req, res) => {
     // Bot detection
     const isBotRequest = isBot(userAgent, req);
 
-    // Debug: Log User-Agent to find Twitter iOS pattern
-    console.log('📱 UA:', userAgent.substring(0, 200));
+    // Geo check - block exclusive content for Israel
+    const geoInfo = getCountryFromIP(req);
+    const isGeoBlocked = geoInfo.countryCode === 'IL';
 
-    res.send(renderProfilePage(data, seo, isBotRequest, null));
+    res.send(renderProfilePage(data, seo, isBotRequest, null, isGeoBlocked));
   } catch (e) {
     console.error('Render error:', e);
     res.status(500).send('Server error');
@@ -1318,7 +1319,11 @@ app.get('/:source', async (req, res, next) => {
     const userAgent = req.headers['user-agent'] || '';
     const isBotRequest = isBot(userAgent, req);
 
-    res.send(renderProfilePage(data, seo, isBotRequest, cleanSource));
+    // Geo check - block exclusive content for Israel
+    const geoInfo = getCountryFromIP(req);
+    const isGeoBlocked = geoInfo.countryCode === 'IL';
+
+    res.send(renderProfilePage(data, seo, isBotRequest, cleanSource, isGeoBlocked));
   } catch (e) {
     console.error('Source route error:', e);
     res.redirect('/');
@@ -1326,11 +1331,12 @@ app.get('/:source', async (req, res, next) => {
 });
 
 // ═══ PROFILE RENDERER (Link Protection) ═══
-function renderProfilePage(data, seo = {}, isBotRequest = false, source = null) {
+function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, isGeoBlocked = false) {
   const p = data.profile || {};
   const socials = data.socials || [];
-  const feats = data.featured || data.feats || [];  // Support both 'featured' and 'feats'
-  const cars = data.carousel || data.cars || [];    // Support both 'carousel' and 'cars'
+  // Hide exclusive content (featured & carousel) for geo-blocked visitors
+  const feats = isGeoBlocked ? [] : (data.featured || data.feats || []);
+  const cars = isGeoBlocked ? [] : (data.carousel || data.cars || []);
   const esc = s => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   const TYPES = {
