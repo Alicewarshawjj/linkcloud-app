@@ -1368,8 +1368,8 @@ app.get('/', async (req, res) => {
 });
 
 // ═══ FACEBOOK ESCAPE: Dedicated route for Facebook in-app browser ═══
-// STRATEGY: Multiple Universal Link attempts with auto-redirect chain
-// Try to trigger iOS "Open in App?" dialog through various app Universal Links
+// STRATEGY: Use YouTube Universal Link to escape Facebook WebView
+// YouTube links trigger iOS "Open in YouTube?" dialog from within WebView
 app.get('/fb', (req, res) => {
   const ua = req.headers['user-agent'] || '';
   const isFacebook = ua.includes('FBAN') || ua.includes('FBAV');
@@ -1383,80 +1383,72 @@ app.get('/fb', (req, res) => {
 
   const targetUrl = `https://${req.hostname}/?browser=1`;
 
+  // YouTube redirect URL - this is a Universal Link that triggers the iOS dialog
+  const youtubeRedirect = `https://www.youtube.com/redirect?event=channel_description&redir_token=QUFFLUhqa0FNcmpfLXlfMzRuZl9sUGNrM3pOWWxzMFJrd3xBQ3Jtc0ttN0xTdmJxZVFfVW1ESk5pT2J4TGlKdE1QNGxsbHBIZnJOc1BsR1J6cXdYLWFGNjA0cVVoNGFkT0tTbmVKUmdjNXBZM0JGZFBmZ1NVTVJvNjFSOFBPdWg&q=${encodeURIComponent(targetUrl)}`;
+
   res.send(`<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>Opening...</title>
+<title>Continue</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#000;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}
-.c{text-align:center;padding:20px}
-.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 20px}
-@keyframes spin{to{transform:rotate(360deg)}}
-h1{font-size:18px;font-weight:500;margin-bottom:8px}
-p{color:#666;font-size:14px;margin-bottom:24px}
-.btn{display:inline-block;padding:14px 28px;background:#0095f6;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600}
-.btn:active{opacity:0.8}
-.alt{margin-top:20px}
-.alt a{color:#0095f6;text-decoration:none;font-size:14px}
+.c{text-align:center;padding:20px;max-width:340px}
+h1{font-size:24px;font-weight:600;margin-bottom:12px}
+p{color:#888;font-size:15px;margin-bottom:28px;line-height:1.5}
+.btn{display:block;width:100%;padding:18px;background:#ff0000;color:#fff;text-decoration:none;border-radius:14px;font-size:17px;font-weight:600;margin-bottom:12px;-webkit-tap-highlight-color:transparent}
+.btn:active{opacity:0.9;transform:scale(0.98)}
+.btn2{background:#262626}
+.small{color:#555;font-size:13px;margin-top:20px}
+.small a{color:#0095f6}
 </style>
 </head><body>
 <div class="c">
-  <div class="spinner"></div>
-  <h1>Opening link...</h1>
-  <p>If nothing happens, tap below</p>
-  <a class="btn" href="${targetUrl}" id="openBtn" target="_blank" rel="noopener">Open Link</a>
-  <div class="alt">
-    <a href="#" id="copyBtn">Copy link instead</a>
-  </div>
+  <h1>Almost there! 👋</h1>
+  <p>Tap the button below to continue. You'll be redirected through YouTube.</p>
+  <a class="btn" href="${youtubeRedirect}" id="ytBtn">Continue via YouTube →</a>
+  <a class="btn btn2" href="${targetUrl}" target="_blank" rel="noopener">Try Direct Link</a>
+  <p class="small">Link not working? <a href="#" id="copyBtn">Copy link</a></p>
 </div>
 <script>
 (function(){
   var target="${targetUrl}";
+  var ytUrl="${youtubeRedirect}";
   var ua=navigator.userAgent||'';
-  var isIOS=/iPhone|iPad|iPod/i.test(ua);
   var isAndroid=/Android/i.test(ua);
 
   // For Android: intent scheme works reliably
   if(isAndroid){
     var intent='intent://'+target.replace(/^https?:\\/\\//,'')+'#Intent;scheme=https;action=android.intent.action.VIEW;end';
-    window.location.href=intent;
+    document.getElementById('ytBtn').href=intent;
+    // Auto-trigger after short delay
+    setTimeout(function(){
+      window.location.href=intent;
+    },400);
     return;
   }
 
-  // For iOS: Try multiple methods in sequence
-  var methods=[
-    // Method 1: Try x-safari-https scheme (iOS 17+)
-    function(){
-      var safariUrl=target.replace(/^https/,'x-safari-https');
-      var a=document.createElement('a');
-      a.href=safariUrl;
-      a.click();
-    },
-    // Method 2: Try googlechrome scheme
-    function(){
-      var chromeUrl=target.replace(/^https/,'googlechromes');
-      window.location.href=chromeUrl;
-    },
-    // Method 3: window.open with _blank
-    function(){
-      var w=window.open(target,'_blank','noopener,noreferrer');
-      if(!w){
-        // Popup blocked, try location
-        window.location.href=target;
-      }
-    }
-  ];
+  // For iOS: Auto-click the YouTube link after a moment
+  // This gives the page time to render and user can see what's happening
+  setTimeout(function(){
+    // Use location.replace for cleaner redirect
+    window.location.replace(ytUrl);
+  },600);
 
-  var i=0;
-  function tryNext(){
-    if(i<methods.length){
-      try{methods[i]();}catch(e){}
-      i++;
-      setTimeout(tryNext,600);
+  // Copy button handler
+  document.getElementById('copyBtn').onclick=function(e){
+    e.preventDefault();
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(target).then(function(){
+        alert('Link copied! Open Safari and paste.');
+      });
+    }else{
+      prompt('Copy:',target);
     }
+  };
+})();
   }
 
   // Start trying methods after small delay
