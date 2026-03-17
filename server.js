@@ -1093,14 +1093,6 @@ app.get('/go/:encodedLink', async (req, res) => {
       return res.status(404).send('Link not found');
     }
 
-    // ══════════════════════════════════════════════════════════════════
-    // GEO BLOCK: Block visitors from Israel
-    // ══════════════════════════════════════════════════════════════════
-    const geoCheck = getCountryFromIP(req);
-    if (geoCheck.countryCode === 'IL') {
-      return res.redirect('https://www.google.com');
-    }
-
     // AES-256-GCM decryption - server-side only
     const url = decodeLink(encodedLink);
 
