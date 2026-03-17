@@ -1571,102 +1571,186 @@ a{color:#fff;margin-top:20px}
 });
 
 // ═══ FACEBOOK DEDICATED ROUTE ═══
-// Testing 10 different methods to escape Facebook's WKWebView
+// Strategy based on ChatGPT analysis: User gesture + cross-domain approach
+// Key insight: juicy.bio works because it redirects to instagram.com (Universal Link)
+// For Safari, we need: landing page → user tap → different domain
 app.get('/facebook', (req, res) => {
-  const method = parseInt(req.query.m) || 1;
+  const method = parseInt(req.query.m) || 0;
   const ua = req.headers['user-agent'] || '';
+  const isFBiOS = /FBAN|FBAV/i.test(ua) && /iPhone|iPad|iPod/i.test(ua);
+  const isAndroid = /Android/i.test(ua);
 
+  // Android: intent scheme still works
+  if (isAndroid && !method) {
+    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<script>window.location.href='intent://cmehere.net/?browser=1#Intent;scheme=https;package=com.android.chrome;end';</script>
+</head><body></body></html>`);
+    return;
+  }
+
+  // Different methods to test
   switch(method) {
     case 1:
-      // Method 1: Meta refresh redirect
-      res.send(`<!DOCTYPE html><html><head>
-<meta http-equiv="refresh" content="0;url=https://cmehere.net/?source=fb1">
-</head><body></body></html>`);
-      break;
-
-    case 2:
-      // Method 2: JavaScript location.replace
-      res.send(`<!DOCTYPE html><html><head><script>
-location.replace('https://cmehere.net/?source=fb2');
-</script></head><body></body></html>`);
-      break;
-
-    case 3:
-      // Method 3: Deep link with googlechrome scheme
-      res.send(`<!DOCTYPE html><html><head><script>
-window.location.href='googlechrome://cmehere.net/?source=fb3';
-setTimeout(function(){window.location.href='https://cmehere.net/?source=fb3'},500);
-</script></head><body></body></html>`);
-      break;
-
-    case 4:
-      // Method 4: Universal Links format (apple-app-site-association style)
-      res.send(`<!DOCTYPE html><html><head><script>
-window.location.href='https://cmehere.net/?source=fb4&openExternalBrowser=1';
-</script></head><body></body></html>`);
-      break;
-
-    case 5:
-      // Method 5: Form POST redirect
-      res.send(`<!DOCTYPE html><html><head></head><body>
-<form id="f" method="GET" action="https://cmehere.net/" target="_top">
-<input type="hidden" name="source" value="fb5">
-</form>
-<script>document.getElementById('f').submit();</script>
+      // Method 1: Landing page with real user tap - RECOMMENDED by ChatGPT
+      // Key: NO auto-redirect, user must TAP the link
+      res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Continue</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#fff;border-radius:24px;padding:40px 30px;text-align:center;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3)}
+.icon{font-size:64px;margin-bottom:20px}
+h1{font-size:24px;margin-bottom:8px;color:#1a1a1a}
+p{color:#666;margin-bottom:30px;font-size:15px;line-height:1.5}
+.btn{display:block;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;text-decoration:none;padding:16px 32px;border-radius:14px;font-size:17px;font-weight:600;transition:transform 0.2s,box-shadow 0.2s}
+.btn:active{transform:scale(0.98)}
+.hint{margin-top:24px;font-size:12px;color:#999}
+</style>
+</head>
+<body>
+<div class="card">
+<div class="icon">🚀</div>
+<h1>Almost there!</h1>
+<p>Tap the button below to continue to the site</p>
+<a class="btn" href="https://cmehere.net/?source=fb_tap">Continue →</a>
+<p class="hint">Opens in your browser</p>
+</div>
 </body></html>`);
       break;
 
-    case 6:
-      // Method 6: iframe with sandbox escape
-      res.send(`<!DOCTYPE html><html><head></head><body>
+    case 2:
+      // Method 2: Delayed redirect after page load (gives WKWebView time to settle)
+      res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body style="background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0">
+<div style="text-align:center">
+<div style="font-size:48px;margin-bottom:20px">⏳</div>
+<p>Loading...</p>
+</div>
 <script>
-var w=window.open('https://cmehere.net/?source=fb6','_system');
-if(!w)window.location.href='https://cmehere.net/?source=fb6';
-</script></body></html>`);
+setTimeout(function(){
+  window.location.href='https://cmehere.net/?source=fb_delay';
+},1500);
+</script>
+</body></html>`);
       break;
 
-    case 7:
-      // Method 7: Blob URL redirect
-      res.send(`<!DOCTYPE html><html><head><script>
-var html='<script>window.location.href="https://cmehere.net/?source=fb7";<\\/script>';
-var blob=new Blob([html],{type:'text/html'});
-var url=URL.createObjectURL(blob);
-window.open(url,'_self');
-</script></head><body></body></html>`);
-      break;
-
-    case 8:
-      // Method 8: History API manipulation
-      res.send(`<!DOCTYPE html><html><head><script>
-history.replaceState(null,null,'https://cmehere.net/?source=fb8');
-window.location.reload();
-</script></head><body></body></html>`);
-      break;
-
-    case 9:
-      // Method 9: Service worker registration attempt
-      res.send(`<!DOCTYPE html><html><head><script>
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('/sw.js').catch(function(){});
+    case 3:
+      // Method 3: Try opening via window.open with user activation simulation
+      res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{margin:0;padding:20px;font-family:-apple-system,sans-serif;background:#000;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.btn{background:#0095f6;color:#fff;border:none;padding:18px 36px;border-radius:12px;font-size:18px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}
+</style>
+</head>
+<body>
+<button class="btn" onclick="openExternal()">Open Site</button>
+<script>
+function openExternal(){
+  var win = window.open('https://cmehere.net/?source=fb_open','_blank');
+  if(!win || win.closed){
+    window.location.href='https://cmehere.net/?source=fb_open_fallback';
+  }
 }
-window.top.location.href='https://cmehere.net/?source=fb9';
-</script></head><body></body></html>`);
+</script>
+</body></html>`);
       break;
 
-    case 10:
-      // Method 10: Click simulation with anchor
-      res.send(`<!DOCTYPE html><html><head></head><body>
-<a id="link" href="https://cmehere.net/?source=fb10" rel="noreferrer noopener external">.</a>
+    case 4:
+      // Method 4: Copy link fallback with instructions
+      res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;background:#1a1a1a;color:#fff;min-height:100vh;padding:30px 20px}
+.container{max-width:360px;margin:0 auto}
+h2{font-size:22px;margin-bottom:16px;text-align:center}
+.step{background:#2a2a2a;border-radius:16px;padding:20px;margin-bottom:16px}
+.step-num{background:#0095f6;color:#fff;width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:bold;margin-right:12px}
+.link-box{background:#333;border-radius:12px;padding:16px;margin:20px 0;word-break:break-all;font-family:monospace;font-size:14px}
+.copy-btn{background:#0095f6;color:#fff;border:none;padding:14px 28px;border-radius:10px;font-size:16px;font-weight:600;width:100%;cursor:pointer}
+.copied{background:#00c853}
+</style>
+</head>
+<body>
+<div class="container">
+<h2>📋 Open in Safari</h2>
+<div class="step"><span class="step-num">1</span>Copy the link below</div>
+<div class="link-box" id="link">cmehere.net</div>
+<button class="copy-btn" onclick="copyLink()">Copy Link</button>
+<div class="step" style="margin-top:20px"><span class="step-num">2</span>Open Safari and paste</div>
+</div>
 <script>
-var link=document.getElementById('link');
-var evt=new MouseEvent('click',{view:window,bubbles:true,cancelable:true});
-link.dispatchEvent(evt);
-</script></body></html>`);
+function copyLink(){
+  navigator.clipboard.writeText('https://cmehere.net/?source=fb_copy').then(function(){
+    var btn=document.querySelector('.copy-btn');
+    btn.textContent='Copied! ✓';
+    btn.classList.add('copied');
+  });
+}
+</script>
+</body></html>`);
+      break;
+
+    case 5:
+      // Method 5: Safari menu hint (minimal)
+      res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{margin:0;padding:40px 20px;font-family:-apple-system,sans-serif;background:#000;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.arrow{font-size:40px;animation:bounce 1s infinite}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+p{margin:20px 0;font-size:16px;opacity:0.9}
+.icon-row{font-size:24px;margin:16px 0}
+</style>
+</head>
+<body>
+<div class="arrow">👆</div>
+<p>Tap <strong>⋯</strong> at the top right</p>
+<div class="icon-row">⋯ → 🌐</div>
+<p>Then tap <strong>"Open in Safari"</strong></p>
+</body></html>`);
       break;
 
     default:
-      // Default: 301 permanent redirect
-      res.redirect(301, 'https://cmehere.net/?source=fb0');
+      // Default (m=0 or no param): Smart landing page with prominent CTA
+      // This is the recommended approach: user gesture + clear action
+      res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>cmehere.net</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;padding-bottom:env(safe-area-inset-bottom)}
+.logo{font-size:48px;margin-bottom:24px}
+h1{font-size:28px;font-weight:700;margin-bottom:12px}
+.subtitle{color:#888;font-size:15px;margin-bottom:40px}
+.cta{display:block;width:100%;max-width:300px;background:linear-gradient(135deg,#00c6ff 0%,#0072ff 100%);color:#fff;text-decoration:none;padding:18px 32px;border-radius:16px;font-size:18px;font-weight:600;text-align:center;box-shadow:0 8px 32px rgba(0,114,255,0.4);transition:transform 0.15s,box-shadow 0.15s}
+.cta:active{transform:scale(0.97);box-shadow:0 4px 16px rgba(0,114,255,0.3)}
+.footer{position:fixed;bottom:20px;bottom:calc(20px + env(safe-area-inset-bottom));font-size:12px;color:#555}
+</style>
+</head>
+<body>
+<div class="logo">🔗</div>
+<h1>cmehere.net</h1>
+<p class="subtitle">Tap to continue</p>
+<a class="cta" href="https://cmehere.net/?source=facebook&browser=1">Open Site →</a>
+<p class="footer">Opens in your default browser</p>
+</body></html>`);
   }
 });
 
