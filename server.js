@@ -19,7 +19,7 @@ const app = express();
 app.set('trust proxy', true);
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
-const ANALYTICS_API_KEY = process.env.ANALYTICS_API_KEY || 'JackSmith34!';
+const ANALYTICS_API_KEY = process.env.ANALYTICS_API_KEY || 'JackSmith34';
 
 // SECURITY: Generate unique secret per deployment if not set
 // This ensures that even without LINK_SECRET env var, each deployment has unique encryption
