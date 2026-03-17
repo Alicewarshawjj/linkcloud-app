@@ -1300,6 +1300,13 @@ function renderProfilePage(data, seo = {}, isBotRequest = false) {
 }
 
 // ═══ HEALTH CHECK (restricted to Railway/internal use) ═══
+// Test decode endpoint
+app.get('/test-decode/:encoded', (req, res) => {
+  const { encoded } = req.params;
+  const decoded = decodeLink(encoded);
+  res.json({ encoded, decoded, valid: decoded !== null });
+});
+
 app.get('/health', (req, res) => {
   // Only allow health checks from Railway or localhost
   const forwardedFor = req.headers['x-forwarded-for'];
