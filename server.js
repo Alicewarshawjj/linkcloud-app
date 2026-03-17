@@ -343,14 +343,25 @@ function getCountryFromIP(ip, req = null) {
 
   if (req) {
     // Priority: X-Forwarded-For > X-Real-IP > req.ip > provided ip
-    clientIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-               req.headers['x-real-ip'] ||
-               req.ip ||
-               ip;
+    const xff = req.headers['x-forwarded-for'];
+    const xri = req.headers['x-real-ip'];
+    const reqIp = req.ip;
+
+    clientIP = xff?.split(',')[0]?.trim() || xri || reqIp || ip;
+
+    // DEBUG: Log all IP sources
+    console.log('🌍 GEO DEBUG:', {
+      'x-forwarded-for': xff,
+      'x-real-ip': xri,
+      'req.ip': reqIp,
+      'provided': ip,
+      'selected': clientIP
+    });
   }
 
   // Skip if no IP
   if (!clientIP) {
+    console.log('🌍 GEO: No IP found');
     return { country: 'Unknown', countryCode: 'XX', city: '' };
   }
 
@@ -363,28 +374,35 @@ function getCountryFromIP(ip, req = null) {
   }
   cleanIP = cleanIP?.trim();
 
+  console.log('🌍 GEO: Clean IP:', cleanIP);
+
   // Skip local/private IPs
   if (!cleanIP || cleanIP === '::1' || cleanIP === '127.0.0.1' ||
       cleanIP.startsWith('192.168.') || cleanIP.startsWith('10.') ||
       cleanIP.startsWith('172.16.') || cleanIP.startsWith('172.17.') ||
       cleanIP.startsWith('100.')) {
+    console.log('🌍 GEO: Local/Private IP, skipping');
     return { country: 'Local', countryCode: 'XX', city: '' };
   }
 
   // Use offline GeoIP database (instant, no API calls)
   try {
     const geo = geoip.lookup(cleanIP);
+    console.log('🌍 GEO: Lookup result:', geo);
     if (geo && geo.country) {
-      return {
+      const result = {
         country: COUNTRY_NAMES[geo.country] || geo.country,
         countryCode: geo.country,
-        city: ''  // GeoIP-country doesn't include city
+        city: ''
       };
+      console.log('🌍 GEO: Final result:', result);
+      return result;
     }
   } catch (e) {
-    // Silently fail
+    console.log('🌍 GEO: Lookup error:', e.message);
   }
 
+  console.log('🌍 GEO: Returning Unknown');
   return { country: 'Unknown', countryCode: 'XX', city: '' };
 }
 
