@@ -1187,8 +1187,8 @@ app.get('/', async (req, res) => {
 function renderProfilePage(data, seo = {}, isBotRequest = false) {
   const p = data.profile || {};
   const socials = data.socials || [];
-  const feats = data.feats || [];
-  const cars = data.cars || [];
+  const feats = data.featured || data.feats || [];  // Support both 'featured' and 'feats'
+  const cars = data.carousel || data.cars || [];    // Support both 'carousel' and 'cars'
   const esc = s => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   const TYPES = {
