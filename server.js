@@ -966,27 +966,66 @@ app.post('/api/analytics/reset', requireAuth, async (req, res) => {
 // ═══ TEST: Insert test click ═══
 app.post('/api/analytics/test-click', requireAuth, async (req, res) => {
   try {
-    // Get real IP info
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '8.8.8.8';
-    const geoInfo = geoip.lookup(ip.replace('::ffff:', ''));
+    // Get all possible IP sources for debugging
+    const xff = req.headers['x-forwarded-for'];
+    const xri = req.headers['x-real-ip'];
+    const cfip = req.headers['cf-connecting-ip'];
+    const reqIp = req.ip;
+
+    // Try to get real IP
+    let ip = cfip || xff?.split(',')[0]?.trim() || xri || reqIp || '';
+    ip = ip.replace('::ffff:', '').trim();
+
+    // Try GeoIP lookup
+    let geoInfo = null;
+    let geoError = null;
+    try {
+      if (ip && !ip.startsWith('10.') && !ip.startsWith('192.168.') && !ip.startsWith('172.') && ip !== '127.0.0.1') {
+        geoInfo = geoip.lookup(ip);
+      }
+    } catch (e) {
+      geoError = e.message;
+    }
+
+    // Parse user agent for real device info
+    const ua = req.headers['user-agent'] || '';
+    const deviceInfo = parseUserAgent(ua);
+
+    // Use real data or fallback to test data
+    const country = geoInfo?.name || 'Israel';
+    const countryCode = geoInfo?.country || 'IL';
 
     await pool.query(
       `INSERT INTO analytics (slug, link_type, link_id, link_title, user_agent, ip_address, country, country_code, os, browser, device, referrer)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      ['main', 'test', 'test-123', 'Test Link', req.headers['user-agent'] || 'Test', ip,
-       geoInfo?.name || 'Test Country', geoInfo?.country || 'XX',
-       'iOS', 'Safari', 'Mobile', 'direct']
+      ['main', 'test', 'test-' + Date.now(), 'Test Link', ua, ip,
+       country, countryCode,
+       deviceInfo.os || 'Unknown', deviceInfo.browser || 'Unknown', deviceInfo.device || 'Unknown', 'test']
     );
 
     const count = await pool.query('SELECT COUNT(*) FROM analytics');
     res.json({
       success: true,
       total_clicks: parseInt(count.rows[0].count),
-      detected_ip: ip,
-      detected_country: geoInfo?.name || 'Unknown'
+      debug: {
+        xff: xff || 'none',
+        xri: xri || 'none',
+        cfip: cfip || 'none',
+        reqIp: reqIp || 'none',
+        finalIp: ip || 'none',
+        geoResult: geoInfo,
+        geoError: geoError
+      },
+      recorded: {
+        country: country,
+        countryCode: countryCode,
+        os: deviceInfo.os,
+        browser: deviceInfo.browser,
+        device: deviceInfo.device
+      }
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: e.message, stack: e.stack });
   }
 });
 
