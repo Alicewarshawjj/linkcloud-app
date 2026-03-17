@@ -439,6 +439,7 @@ function encodeLink(url) {
 
 function decodeLink(encoded) {
   try {
+    console.log('🔓 DECODE: Starting decode, length:', encoded?.length);
     // Restore base64 padding
     let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
     while (base64.length % 4) base64 += '=';
@@ -462,15 +463,23 @@ function decodeLink(encoded) {
     decipher.setAuthTag(authTag);
 
     const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+    console.log('🔓 DECODE: AES decryption success');
     return decrypted.toString('utf8');
   } catch (e) {
+    console.log('🔓 DECODE: AES failed, trying legacy base64:', e.message);
     // Try legacy base64 decode as fallback
     try {
       let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
       while (base64.length % 4) base64 += '=';
       const decoded = Buffer.from(base64, 'base64').toString('utf8');
-      if (decoded.startsWith('http')) return decoded;
-    } catch {}
+      if (decoded.startsWith('http')) {
+        console.log('🔓 DECODE: Legacy base64 success');
+        return decoded;
+      }
+      console.log('🔓 DECODE: Legacy base64 not a URL:', decoded.slice(0, 30));
+    } catch (e2) {
+      console.log('🔓 DECODE: Legacy base64 also failed:', e2.message);
+    }
     return null;
   }
 }
@@ -985,15 +994,20 @@ app.get('/go/:encodedLink', async (req, res) => {
     const { encodedLink } = req.params;
     const { t: linkType, n: linkTitle } = req.query;
 
+    console.log('🔗 REDIRECT DEBUG:', { encodedLink: encodedLink?.slice(0, 50), linkType, linkTitle });
+
     // Validate encoded link format
     if (!encodedLink || encodedLink.length > 1000) {
+      console.log('🔗 REDIRECT: Invalid encoded link length');
       return res.status(404).send('Link not found');
     }
 
     // AES-256-GCM decryption - server-side only
     const url = decodeLink(encodedLink);
+    console.log('🔗 DECODED URL:', url ? url.slice(0, 50) + '...' : 'NULL');
 
     if (!url || !url.startsWith('http')) {
+      console.log('🔗 REDIRECT: Invalid decoded URL');
       return res.status(404).send('Link not found');
     }
 
