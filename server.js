@@ -1428,10 +1428,43 @@ a{color:#fff;margin-top:20px}
 });
 
 // ═══ FACEBOOK DEDICATED ROUTE ═══
-// Facebook has its own "Open in Browser" option - show page WITHOUT blur overlay
-// User sees normal page → taps FB's native "Open in Browser" button
+// Facebook needs window.location.href (not window.open) for x-safari-https to work
 app.get('/facebook', (req, res) => {
-  res.redirect('/?noblur=1');
+  if (req.query.browser === '1') {
+    return res.redirect('/');
+  }
+  res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opening...</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#000;color:#fff}
+.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+p{margin-top:20px;opacity:0.7}
+a{color:#fff;margin-top:20px}
+</style>
+</head><body>
+<div class="spinner"></div>
+<p>Opening in Safari...</p>
+<a href="/?browser=1">Tap here if nothing happens</a>
+<script>
+(function(){
+  var url='https://cmehere.net/?browser=1';
+  var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var isAndroid=/Android/i.test(navigator.userAgent);
+  if(isIOS){
+    // Facebook iOS: use window.location.href (not window.open!)
+    window.location.href='x-safari-https://cmehere.net/?browser=1';
+  }else if(isAndroid){
+    window.location.href='intent://cmehere.net/?browser=1#Intent;scheme=https;package=com.android.chrome;end';
+  }else{
+    window.location.href=url;
+  }
+})();
+</script>
+</body></html>`);
 });
 
 // ═══ TRAFFIC SOURCE ROUTE (Clean URLs: /ig-main, /twitter1, etc.) ═══
