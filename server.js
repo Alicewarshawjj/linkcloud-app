@@ -290,9 +290,56 @@ function parseUserAgent(ua) {
   return { os, browser, device };
 }
 
-// IP Geolocation using multiple providers for reliability
-// Primary: ipinfo.io (50K/month free), Fallback: ip-api.com
-async function getCountryFromIP(ip) {
+// Country code to full name mapping
+const COUNTRY_NAMES = {
+  'US': 'United States', 'GB': 'United Kingdom', 'IL': 'Israel',
+  'DE': 'Germany', 'FR': 'France', 'ES': 'Spain', 'IT': 'Italy',
+  'NL': 'Netherlands', 'BE': 'Belgium', 'CH': 'Switzerland',
+  'AT': 'Austria', 'AU': 'Australia', 'CA': 'Canada', 'BR': 'Brazil',
+  'MX': 'Mexico', 'JP': 'Japan', 'KR': 'South Korea', 'CN': 'China',
+  'IN': 'India', 'RU': 'Russia', 'PL': 'Poland', 'SE': 'Sweden',
+  'NO': 'Norway', 'DK': 'Denmark', 'FI': 'Finland', 'PT': 'Portugal',
+  'GR': 'Greece', 'TR': 'Turkey', 'AE': 'UAE', 'SA': 'Saudi Arabia',
+  'EG': 'Egypt', 'ZA': 'South Africa', 'NG': 'Nigeria', 'KE': 'Kenya',
+  'AR': 'Argentina', 'CL': 'Chile', 'CO': 'Colombia', 'PE': 'Peru',
+  'TH': 'Thailand', 'VN': 'Vietnam', 'PH': 'Philippines', 'ID': 'Indonesia',
+  'MY': 'Malaysia', 'SG': 'Singapore', 'NZ': 'New Zealand', 'IE': 'Ireland',
+  'CZ': 'Czech Republic', 'HU': 'Hungary', 'RO': 'Romania', 'UA': 'Ukraine'
+};
+
+// Get geolocation from Cloudflare/CDN headers (BEST - instant, free, accurate)
+function getGeoFromRequest(req) {
+  // Cloudflare headers
+  const cfCountry = req.headers['cf-ipcountry'];
+  if (cfCountry && cfCountry !== 'XX' && cfCountry !== 'T1') {
+    return {
+      country: COUNTRY_NAMES[cfCountry] || cfCountry,
+      countryCode: cfCountry,
+      city: req.headers['cf-ipcity'] || ''
+    };
+  }
+
+  // Vercel geolocation headers
+  const vercelCountry = req.headers['x-vercel-ip-country'];
+  if (vercelCountry) {
+    return {
+      country: COUNTRY_NAMES[vercelCountry] || vercelCountry,
+      countryCode: vercelCountry,
+      city: req.headers['x-vercel-ip-city'] || ''
+    };
+  }
+
+  return null;
+}
+
+// Fallback: IP Geolocation using external APIs
+async function getCountryFromIP(ip, req = null) {
+  // First try CDN headers (Cloudflare, Vercel)
+  if (req) {
+    const cdnGeo = getGeoFromRequest(req);
+    if (cdnGeo) return cdnGeo;
+  }
+
   // Skip local/private IPs
   if (!ip || ip === '::1' || ip === '127.0.0.1' ||
       ip.startsWith('192.168.') || ip.startsWith('10.') ||
@@ -301,59 +348,36 @@ async function getCountryFromIP(ip) {
     return { country: 'Local', countryCode: 'XX', city: 'Local' };
   }
 
-  // Clean IP (remove port if present)
   const cleanIP = ip.split(':')[0].trim();
 
+  // Try ipinfo.io (HTTPS, 50K req/month free)
   try {
-    // Try ipinfo.io first (HTTPS, more reliable, 50K req/month free)
     const response = await fetch(`https://ipinfo.io/${cleanIP}/json`, {
       headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(3000) // 3 second timeout
+      signal: AbortSignal.timeout(2000)
     });
-
     if (response.ok) {
       const data = await response.json();
       if (data.country) {
-        // ipinfo returns country code, we need to map to full name
-        const countryNames = {
-          'US': 'United States', 'GB': 'United Kingdom', 'IL': 'Israel',
-          'DE': 'Germany', 'FR': 'France', 'ES': 'Spain', 'IT': 'Italy',
-          'NL': 'Netherlands', 'BE': 'Belgium', 'CH': 'Switzerland',
-          'AT': 'Austria', 'AU': 'Australia', 'CA': 'Canada', 'BR': 'Brazil',
-          'MX': 'Mexico', 'JP': 'Japan', 'KR': 'South Korea', 'CN': 'China',
-          'IN': 'India', 'RU': 'Russia', 'PL': 'Poland', 'SE': 'Sweden',
-          'NO': 'Norway', 'DK': 'Denmark', 'FI': 'Finland', 'PT': 'Portugal',
-          'GR': 'Greece', 'TR': 'Turkey', 'AE': 'UAE', 'SA': 'Saudi Arabia',
-          'EG': 'Egypt', 'ZA': 'South Africa', 'NG': 'Nigeria', 'KE': 'Kenya',
-          'AR': 'Argentina', 'CL': 'Chile', 'CO': 'Colombia', 'PE': 'Peru',
-          'TH': 'Thailand', 'VN': 'Vietnam', 'PH': 'Philippines', 'ID': 'Indonesia',
-          'MY': 'Malaysia', 'SG': 'Singapore', 'NZ': 'New Zealand', 'IE': 'Ireland',
-          'CZ': 'Czech Republic', 'HU': 'Hungary', 'RO': 'Romania', 'UA': 'Ukraine'
-        };
         return {
-          country: countryNames[data.country] || data.country,
+          country: COUNTRY_NAMES[data.country] || data.country,
           countryCode: data.country,
           city: data.city || ''
         };
       }
     }
-  } catch (e) {
-    // ipinfo failed, try fallback
-    console.log(`ipinfo.io failed for ${cleanIP}: ${e.message}`);
-  }
+  } catch (e) { /* try next */ }
 
-  // Fallback to ip-api.com (HTTP only, 45 req/min)
+  // Fallback to ip-api.com
   try {
     const response = await fetch(`http://ip-api.com/json/${cleanIP}?fields=status,country,countryCode,city`, {
-      signal: AbortSignal.timeout(3000)
+      signal: AbortSignal.timeout(2000)
     });
     const data = await response.json();
     if (data.status === 'success') {
       return { country: data.country, countryCode: data.countryCode, city: data.city || '' };
     }
-  } catch (e) {
-    console.log(`ip-api.com fallback failed for ${cleanIP}: ${e.message}`);
-  }
+  } catch (e) { /* fail silently */ }
 
   return { country: 'Unknown', countryCode: 'XX', city: '' };
 }
@@ -715,7 +739,7 @@ app.post('/api/analytics/click', analyticsLimiter, async (req, res) => {
     // Get country - don't block on failure
     let geoInfo = { country: 'Unknown', countryCode: 'XX', city: '' };
     try {
-      geoInfo = await getCountryFromIP(ip_address);
+      geoInfo = await getCountryFromIP(ip_address, req);
     } catch (geoErr) {
       // Silently continue with unknown location
     }
@@ -951,7 +975,7 @@ app.get('/go/:encodedLink', async (req, res) => {
     const deviceInfo = parseUserAgent(user_agent);
     let geoInfo = { country: 'Unknown', countryCode: 'XX', city: '' };
     try {
-      geoInfo = await getCountryFromIP(ip_address);
+      geoInfo = await getCountryFromIP(ip_address, req);
     } catch { /* ignore */ }
 
     // SECURITY: Only store opaque ID (hash of encrypted link), NOT the actual URL
