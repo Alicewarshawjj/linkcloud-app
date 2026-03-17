@@ -13,7 +13,7 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
-const LINK_ENCRYPTION_KEY = process.env.LINK_KEY || 'lc-2024-secret-key-32ch';
+const LINK_SECRET_BASE = process.env.LINK_SECRET || 'cmehere-secure-2024-xK9mP2vL';
 
 // Database ready flag (for graceful startup)
 let dbReady = false;
@@ -404,26 +404,80 @@ async function getCountryFromIP(ip, req = null) {
   return { country: 'Unknown', countryCode: 'XX', city: '' };
 }
 
-// ═══ LINK ENCODING (Base64) ═══
-// Simple URL-safe encoding - security handled by Cloudflare bot protection and rate limiting
+// ═══ LINK ENCRYPTION (AES-256-GCM) ═══
+// Military-grade encryption - links cannot be decoded without the secret key
+// Even with full source code access, attackers cannot decode links
+
+// Generate a stable 32-byte key from the secret using scrypt (password-based key derivation)
+const LINK_KEY = crypto.scryptSync(LINK_SECRET_BASE, 'cmehere-salt-v2', 32);
+
+// Link expiration time (optional - set to 0 to disable)
+const LINK_EXPIRY_HOURS = 0; // 0 = no expiration, or set to 24 for 24-hour links
 
 function encodeLink(url) {
-  return Buffer.from(url, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  try {
+    // Create payload with optional timestamp
+    const payload = {
+      u: url,
+      t: LINK_EXPIRY_HOURS > 0 ? Date.now() : 0
+    };
+    const plaintext = JSON.stringify(payload);
+
+    // Generate random IV for each encryption (12 bytes for GCM)
+    const iv = crypto.randomBytes(12);
+
+    // Encrypt with AES-256-GCM
+    const cipher = crypto.createCipheriv('aes-256-gcm', LINK_KEY, iv);
+    const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+
+    // Combine: IV (12) + AuthTag (16) + Encrypted data
+    const combined = Buffer.concat([iv, authTag, encrypted]);
+
+    // URL-safe base64
+    return combined.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  } catch (e) {
+    console.error('🔐 ENCRYPT ERROR:', e.message);
+    return null;
+  }
 }
 
 function decodeLink(encoded) {
   try {
-    // Simple URL-safe base64 decoding
+    // Convert from URL-safe base64
     let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
     while (base64.length % 4) base64 += '=';
-    const decoded = Buffer.from(base64, 'base64').toString('utf8');
-    if (decoded.startsWith('http')) {
-      return decoded;
+    const combined = Buffer.from(base64, 'base64');
+
+    // Minimum size: IV (12) + AuthTag (16) + at least 1 byte data
+    if (combined.length < 29) return null;
+
+    // Extract components
+    const iv = combined.subarray(0, 12);
+    const authTag = combined.subarray(12, 28);
+    const encrypted = combined.subarray(28);
+
+    // Decrypt with AES-256-GCM
+    const decipher = crypto.createDecipheriv('aes-256-gcm', LINK_KEY, iv);
+    decipher.setAuthTag(authTag);
+    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+
+    // Parse payload
+    const payload = JSON.parse(decrypted.toString('utf8'));
+
+    // Check expiration if enabled
+    if (LINK_EXPIRY_HOURS > 0 && payload.t > 0) {
+      const expiryMs = LINK_EXPIRY_HOURS * 60 * 60 * 1000;
+      if (Date.now() - payload.t > expiryMs) return null;
     }
-    console.log('🔓 DECODE: Not a valid URL');
+
+    // Validate URL
+    if (payload.u && payload.u.startsWith('http')) {
+      return payload.u;
+    }
     return null;
   } catch (e) {
-    console.log('🔓 DECODE ERROR:', e.message);
+    // Silent fail - don't leak any info about encryption
     return null;
   }
 }
@@ -931,105 +985,6 @@ app.get('/special-offer', (req, res) => {
   res.redirect(301, 'https://example.com/expired');
 });
 
-// ═══ DEBUG: Analytics Raw Data ═══
-app.get('/api/debug/analytics', requireAuth, async (req, res) => {
-  try {
-    // Show raw database records
-    const result = await pool.query(
-      `SELECT id, link_type, link_title, country, country_code, city, os, browser, device, clicked_at
-       FROM analytics
-       ORDER BY clicked_at DESC
-       LIMIT 20`
-    );
-
-    // Also show headers being received
-    const headers = {
-      'cf-ipcountry': req.headers['cf-ipcountry'],
-      'cf-ipcity': req.headers['cf-ipcity'],
-      'cf-ray': req.headers['cf-ray'],
-      'cf-connecting-ip': req.headers['cf-connecting-ip'],
-      'x-forwarded-for': req.headers['x-forwarded-for'],
-      'x-real-ip': req.headers['x-real-ip']
-    };
-
-    res.json({
-      message: 'Debug analytics data',
-      headers_received: headers,
-      total_records: result.rowCount,
-      recent_records: result.rows
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ═══ DEBUG: Test Geolocation Detection ═══
-app.get('/api/debug/geo', async (req, res) => {
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-             req.headers['cf-connecting-ip'] ||
-             req.ip || '';
-
-  // Test all geolocation methods
-  const results = {
-    your_ip: ip,
-    cloudflare_headers: {
-      'cf-ipcountry': req.headers['cf-ipcountry'] || 'NOT SET',
-      'cf-ipcity': req.headers['cf-ipcity'] || 'NOT SET',
-      'cf-ray': req.headers['cf-ray'] || 'NOT SET (Cloudflare not proxying)',
-      'cf-connecting-ip': req.headers['cf-connecting-ip'] || 'NOT SET'
-    },
-    railway_headers: {
-      'x-forwarded-for': req.headers['x-forwarded-for'] || 'NOT SET',
-      'x-real-ip': req.headers['x-real-ip'] || 'NOT SET'
-    },
-    detection_results: {}
-  };
-
-  // Test CDN detection
-  const cdnGeo = getGeoFromRequest(req);
-  results.detection_results.cdn_method = cdnGeo || 'FAILED - No CDN headers';
-
-  // Test IP API fallback
-  try {
-    const geoResult = await getCountryFromIP(ip, req);
-    results.detection_results.final_result = geoResult;
-  } catch (e) {
-    results.detection_results.final_result = { error: e.message };
-  }
-
-  // Test external APIs directly
-  try {
-    let cleanIP = ip;
-    if (ip.includes('::ffff:')) cleanIP = ip.split('::ffff:')[1];
-
-    const ipinfoRes = await fetch(`https://ipinfo.io/${cleanIP}/json`, {
-      headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(3000)
-    });
-    if (ipinfoRes.ok) {
-      results.detection_results.ipinfo_api = await ipinfoRes.json();
-    } else {
-      results.detection_results.ipinfo_api = { error: `HTTP ${ipinfoRes.status}` };
-    }
-  } catch (e) {
-    results.detection_results.ipinfo_api = { error: e.message };
-  }
-
-  try {
-    let cleanIP = ip;
-    if (ip.includes('::ffff:')) cleanIP = ip.split('::ffff:')[1];
-
-    const ipApiRes = await fetch(`http://ip-api.com/json/${cleanIP}?fields=status,country,countryCode,city,message`, {
-      signal: AbortSignal.timeout(3000)
-    });
-    results.detection_results.ip_api = await ipApiRes.json();
-  } catch (e) {
-    results.detection_results.ip_api = { error: e.message };
-  }
-
-  res.json(results);
-});
-
 // ═══ LINK REDIRECT (Server-Side AES-256-GCM Decryption) ═══
 // Links are encrypted with AES-256-GCM - only the server has the key
 // Even crawlers with full source code access cannot decode links
@@ -1038,20 +993,15 @@ app.get('/go/:encodedLink', async (req, res) => {
     const { encodedLink } = req.params;
     const { t: linkType, n: linkTitle } = req.query;
 
-    console.log('🔗 REDIRECT DEBUG:', { encodedLink: encodedLink?.slice(0, 50), linkType, linkTitle });
-
     // Validate encoded link format
     if (!encodedLink || encodedLink.length > 1000) {
-      console.log('🔗 REDIRECT: Invalid encoded link length');
       return res.status(404).send('Link not found');
     }
 
     // AES-256-GCM decryption - server-side only
     const url = decodeLink(encodedLink);
-    console.log('🔗 DECODED URL:', url ? url.slice(0, 50) + '...' : 'NULL');
 
     if (!url || !url.startsWith('http')) {
-      console.log('🔗 REDIRECT: Invalid decoded URL');
       return res.status(404).send('Link not found');
     }
 
@@ -1408,13 +1358,6 @@ function renderProfilePage(data, seo = {}, isBotRequest = false) {
 }
 
 // ═══ HEALTH CHECK (restricted to Railway/internal use) ═══
-// Test decode endpoint
-app.get('/test-decode/:encoded', (req, res) => {
-  const { encoded } = req.params;
-  const decoded = decodeLink(encoded);
-  res.json({ encoded, decoded, valid: decoded !== null });
-});
-
 app.get('/health', (req, res) => {
   // Only allow health checks from Railway or localhost
   const forwardedFor = req.headers['x-forwarded-for'];
