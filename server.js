@@ -1428,37 +1428,56 @@ a{color:#fff;margin-top:20px}
 });
 
 // ═══ FACEBOOK DEDICATED ROUTE ═══
-// Facebook blocks URL schemes - use button with target="_blank" which FB respects on user tap
+// Facebook blocks URL schemes - show instructions to open in Safari manually
 app.get('/facebook', (req, res) => {
   if (req.query.browser === '1') {
     return res.redirect('/');
   }
-  // Facebook-specific: Show button that user taps - FB respects target="_blank" on user interaction
+  // Facebook-specific: Guide user to tap the 3 dots menu → "Open in Safari"
   res.send(`<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Open in Safari</title>
 <style>
-*{box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);color:#fff;padding:20px}
-.container{text-align:center;max-width:320px}
-.icon{font-size:48px;margin-bottom:20px}
-h1{font-size:22px;margin:0 0 10px;font-weight:600}
-p{font-size:14px;opacity:0.7;margin:0 0 30px;line-height:1.5}
-.btn{display:block;width:100%;padding:16px 24px;background:#0095f6;color:#fff;text-decoration:none;border-radius:12px;font-size:17px;font-weight:600;transition:transform 0.2s,background 0.2s}
-.btn:active{transform:scale(0.98);background:#007acc}
-.alt{margin-top:20px;font-size:13px;opacity:0.5}
-.alt a{color:#fff}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;min-height:100vh;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);color:#fff;padding:20px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.container{text-align:center;max-width:340px;width:100%}
+.arrow{font-size:60px;animation:bounce 1s infinite;margin-bottom:10px}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+h1{font-size:24px;margin:20px 0 12px;font-weight:700}
+.step{background:rgba(255,255,255,0.1);border-radius:12px;padding:16px;margin:12px 0;text-align:left;font-size:15px;line-height:1.6}
+.step-num{display:inline-block;width:24px;height:24px;background:#0095f6;border-radius:50%;text-align:center;line-height:24px;font-size:13px;font-weight:700;margin-right:10px}
+.dots{font-size:20px;letter-spacing:2px}
+.or{margin:24px 0 16px;font-size:13px;opacity:0.6}
+.btn{display:block;width:100%;padding:16px;background:#0095f6;color:#fff;text-decoration:none;border-radius:12px;font-size:17px;font-weight:600}
+.copy-btn{background:rgba(255,255,255,0.15);margin-top:12px;border:1px solid rgba(255,255,255,0.2)}
+.url-box{background:rgba(0,0,0,0.3);border-radius:8px;padding:12px;margin:16px 0;font-size:13px;word-break:break-all;font-family:monospace}
 </style>
 </head><body>
 <div class="container">
-<div class="icon">🔗</div>
+<div class="arrow">☝️</div>
 <h1>Open in Safari</h1>
-<p>Tap the button below to view the full site in Safari</p>
-<a href="/?browser=1" target="_blank" rel="noopener" class="btn" onclick="setTimeout(function(){window.location.href='/?browser=1'},500)">Open in Safari</a>
-<p class="alt">Or <a href="/?browser=1">continue here</a></p>
+<div class="step"><span class="step-num">1</span>Tap <span class="dots">•••</span> at the top right</div>
+<div class="step"><span class="step-num">2</span>Select <strong>"Open in Safari"</strong> or <strong>"Open in Browser"</strong></div>
+<div class="or">— or copy the link —</div>
+<div class="url-box" id="urlBox">https://cmehere.net</div>
+<button class="btn copy-btn" onclick="copyUrl()">📋 Copy Link</button>
+<a href="https://cmehere.net/?browser=1" class="btn" style="margin-top:24px">Continue in Facebook Browser</a>
 </div>
+<script>
+function copyUrl(){
+  var url='https://cmehere.net';
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(function(){
+      document.querySelector('.copy-btn').textContent='✅ Copied!';
+      setTimeout(function(){document.querySelector('.copy-btn').textContent='📋 Copy Link'},2000);
+    });
+  }else{
+    prompt('Copy this link:',url);
+  }
+}
+</script>
 </body></html>`);
 });
 
