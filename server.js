@@ -1126,7 +1126,6 @@ app.get('/go/:encodedLink', async (req, res) => {
 
     // Check if it's a Twitter/X link - needs special handling to open in app
     const isTwitterLink = url.includes('twitter.com') || url.includes('x.com');
-    console.log('🔗 Redirect:', url, '| Twitter:', isTwitterLink);
 
     if (isTwitterLink) {
       // Twitter/X needs intent:// for Android and special handling for iOS
@@ -1436,7 +1435,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null) 
   ${p.avatarUrl ? `<meta name="twitter:image" content="${esc(p.avatarUrl)}">` : ''}
   <link rel="icon" href="/favicon.ico">
   <script id="early-deeplink-detect">
-  (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';window.__IS_INAPP__=ua.indexOf('Instagram')!==-1||ua.indexOf('FBAN')!==-1||ua.indexOf('FBAV')!==-1||ua.indexOf('TikTok')!==-1||ua.indexOf('LinkedInApp')!==-1;window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua)}catch(e){}})();
+  (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';window.__IS_INAPP__=ua.indexOf('Instagram')!==-1||ua.indexOf('FBAN')!==-1||ua.indexOf('FBAV')!==-1||ua.indexOf('TikTok')!==-1||ua.indexOf('LinkedInApp')!==-1||ua.indexOf('Twitter')!==-1||ua.indexOf('TwitterAndroid')!==-1;window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua)}catch(e){}})();
   </script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
