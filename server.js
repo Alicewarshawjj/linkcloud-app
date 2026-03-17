@@ -1571,26 +1571,9 @@ a{color:#fff;margin-top:20px}
 });
 
 // ═══ FACEBOOK DEDICATED ROUTE ═══
-// Facebook: Immediate redirect - no UI, just auto-open Safari
+// Facebook: Just show normal page - user taps URL bar at top to open in Safari
 app.get('/facebook', (req, res) => {
-  if (req.query.browser === '1') {
-    return res.redirect('/');
-  }
-  // Minimal HTML with immediate redirect - no visible content
-  res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><script>
-(function(){
-  var ua=navigator.userAgent||'';
-  var isIOS=/iPhone|iPad|iPod/i.test(ua);
-  var isAndroid=/Android/i.test(ua);
-  if(isIOS){
-    window.location.href='x-safari-https://cmehere.net/?browser=1';
-  }else if(isAndroid){
-    window.location.href='intent://cmehere.net/?browser=1#Intent;scheme=https;package=com.android.chrome;end';
-  }else{
-    window.location.href='https://cmehere.net/?browser=1';
-  }
-})();
-</script></head><body></body></html>`);
+  res.redirect('/?noblur=1');
 });
 
 // ═══ TRAFFIC SOURCE ROUTE (Clean URLs: /ig-main, /twitter1, etc.) ═══
