@@ -221,6 +221,9 @@
         .live-indicator{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#22c55e}
         .live-dot{width:8px;height:8px;background:#22c55e;border-radius:50%;animation:pulse 2s infinite}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+        .live-filter{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#bbb;padding:6px 12px;font-size:12px;cursor:pointer;outline:none}
+        .live-filter:hover{border-color:rgba(102,126,234,.3)}
+        .live-filter option{background:#1a1a2e;color:#ddd}
 
         /* Top Links */
         .top-link-item{display:flex;align-items:center;gap:14px;padding:14px;background:rgba(255,255,255,.02);border-radius:12px;margin-bottom:10px}
@@ -620,8 +623,17 @@
                 <!-- Live Feed -->
                 <div class="analytics-card" style="margin-top:20px">
                     <div class="analytics-card-header">
-                        <div class="analytics-card-title"><span>⚡</span> Live Feed</div>
-                        <div class="live-indicator"><span class="live-dot"></span> LIVE</div>
+                        <div class="analytics-card-title"><span>⚡</span> Live Feed <span id="liveCount" style="font-size:12px;color:#888;font-weight:400"></span></div>
+                        <div style="display:flex;align-items:center;gap:12px">
+                            <select id="liveFeedRange" class="live-filter" onchange="changeLiveFeedRange()">
+                                <option value="30">30 minutes</option>
+                                <option value="60">1 hour</option>
+                                <option value="240">4 hours</option>
+                                <option value="720">12 hours</option>
+                                <option value="1440">24 hours</option>
+                            </select>
+                            <div class="live-indicator"><span class="live-dot"></span> LIVE</div>
+                        </div>
                     </div>
                     <div class="live-feed" id="liveFeedContent">
                         <div class="spinner"></div>
@@ -1050,6 +1062,7 @@ function renderDevices(devices, browsers, os) {
 let livePollingInterval = null;
 let lastClickTimestamp = null;
 let seenClickIds = new Set();
+let liveFeedMinutes = 30; // Default: 30 minutes
 
 function renderLiveFeed(recent, isUpdate = false) {
     const container = document.getElementById('liveFeedContent');
@@ -1098,32 +1111,58 @@ function renderLiveFeed(recent, isUpdate = false) {
     }
 }
 
-async function pollLiveFeed() {
+async function pollLiveFeed(fullRefresh = false) {
     try {
-        const since = lastClickTimestamp || new Date(Date.now() - 60000).toISOString();
+        const since = fullRefresh
+            ? new Date(Date.now() - liveFeedMinutes * 60000).toISOString()
+            : (lastClickTimestamp || new Date(Date.now() - liveFeedMinutes * 60000).toISOString());
+
         const res = await fetch(`/api/analytics/live?since=${encodeURIComponent(since)}`, {credentials:'same-origin'});
         if (!res.ok) return;
 
         const data = await res.json();
+
+        // Update count display
+        const countEl = document.getElementById('liveCount');
+        if (countEl) {
+            countEl.textContent = `(${data.count} clicks)`;
+        }
+
         if (data.clicks && data.clicks.length > 0) {
             // Update timestamp for next poll
             lastClickTimestamp = data.latest;
-            // Render new clicks
-            renderLiveFeed(data.clicks, true);
+            // Render clicks
+            if (fullRefresh) {
+                seenClickIds.clear();
+                renderLiveFeed(data.clicks, false);
+            } else {
+                renderLiveFeed(data.clicks, true);
+            }
             // Update badge
             loadAnalyticsBadge();
+        } else if (fullRefresh) {
+            document.getElementById('liveFeedContent').innerHTML = `<div class="empty-state"><div class="icon">⚡</div><h4>No clicks in this period</h4><p>Try a longer time range</p></div>`;
         }
     } catch (e) {
         console.error('Live poll error:', e);
     }
 }
 
+function changeLiveFeedRange() {
+    const select = document.getElementById('liveFeedRange');
+    liveFeedMinutes = parseInt(select.value);
+    lastClickTimestamp = null;
+    seenClickIds.clear();
+    document.getElementById('liveFeedContent').innerHTML = '<div class="spinner"></div>';
+    pollLiveFeed(true);
+}
+
 function startLivePolling() {
     if (livePollingInterval) return;
-    // Poll every 5 seconds
-    livePollingInterval = setInterval(pollLiveFeed, 5000);
-    // Also poll immediately
-    pollLiveFeed();
+    // Initial full load
+    pollLiveFeed(true);
+    // Poll every 5 seconds for new clicks
+    livePollingInterval = setInterval(() => pollLiveFeed(false), 5000);
 }
 
 function stopLivePolling() {
