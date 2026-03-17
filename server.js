@@ -932,6 +932,289 @@ app.get('/api/analytics/live', requireAuth, async (req, res) => {
   }
 });
 
+// ═══ AI SUMMARY: Comprehensive analytics for AI analysis ═══
+app.get('/api/analytics/ai-summary', async (req, res) => {
+  try {
+    // API key authentication (for external bot access)
+    const apiKey = req.headers['x-api-key'] || req.query.key;
+    const validKey = process.env.ANALYTICS_API_KEY;
+
+    if (!validKey || apiKey !== validKey) {
+      return res.status(401).json({ error: 'Invalid API key' });
+    }
+
+    const days = Math.min(parseInt(req.query.days) || 7, 90);
+    const compareDays = days; // Compare to previous period
+
+    // Current period stats
+    const currentPeriod = await pool.query(`
+      SELECT
+        COUNT(*) as total_clicks,
+        COUNT(DISTINCT ip_address) as unique_visitors,
+        COUNT(DISTINCT country_code) as countries_count
+      FROM analytics
+      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+    `);
+
+    // Previous period stats (for comparison)
+    const previousPeriod = await pool.query(`
+      SELECT COUNT(*) as total_clicks
+      FROM analytics
+      WHERE clicked_at > NOW() - INTERVAL '${days * 2} days'
+        AND clicked_at <= NOW() - INTERVAL '${days} days'
+    `);
+
+    // Top countries
+    const topCountries = await pool.query(`
+      SELECT country, country_code, region, COUNT(*) as clicks
+      FROM analytics
+      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      GROUP BY country, country_code, region
+      ORDER BY clicks DESC
+      LIMIT 10
+    `);
+
+    // Top US states
+    const topUSStates = await pool.query(`
+      SELECT region, COUNT(*) as clicks
+      FROM analytics
+      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+        AND country_code = 'US'
+        AND region IS NOT NULL
+      GROUP BY region
+      ORDER BY clicks DESC
+      LIMIT 10
+    `);
+
+    // Top links
+    const topLinks = await pool.query(`
+      SELECT link_type, link_title, COUNT(*) as clicks
+      FROM analytics
+      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      GROUP BY link_type, link_title
+      ORDER BY clicks DESC
+      LIMIT 10
+    `);
+
+    // Traffic sources
+    const trafficSources = await pool.query(`
+      SELECT COALESCE(source, 'direct') as source, COUNT(*) as clicks
+      FROM analytics
+      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      GROUP BY source
+      ORDER BY clicks DESC
+      LIMIT 10
+    `);
+
+    // Hourly distribution (peak hours)
+    const hourlyStats = await pool.query(`
+      SELECT EXTRACT(HOUR FROM clicked_at) as hour, COUNT(*) as clicks
+      FROM analytics
+      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      GROUP BY hour
+      ORDER BY clicks DESC
+    `);
+
+    // Daily trend
+    const dailyTrend = await pool.query(`
+      SELECT DATE(clicked_at) as date, COUNT(*) as clicks
+      FROM analytics
+      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      GROUP BY date
+      ORDER BY date DESC
+    `);
+
+    // Device breakdown
+    const devices = await pool.query(`
+      SELECT device, COUNT(*) as clicks
+      FROM analytics
+      WHERE clicked_at > NOW() - INTERVAL '${days} days'
+      GROUP BY device
+      ORDER BY clicks DESC
+    `);
+
+    // Calculate insights
+    const current = parseInt(currentPeriod.rows[0].total_clicks);
+    const previous = parseInt(previousPeriod.rows[0].total_clicks);
+    const changePercent = previous > 0 ? Math.round(((current - previous) / previous) * 100) : 0;
+
+    // Find peak hours
+    const peakHours = hourlyStats.rows.slice(0, 3).map(h => parseInt(h.hour));
+
+    res.json({
+      period: `${days} days`,
+      generated_at: new Date().toISOString(),
+
+      summary: {
+        total_clicks: current,
+        unique_visitors: parseInt(currentPeriod.rows[0].unique_visitors),
+        countries_reached: parseInt(currentPeriod.rows[0].countries_count),
+        change_vs_previous: {
+          percent: changePercent,
+          direction: changePercent > 0 ? 'up' : changePercent < 0 ? 'down' : 'stable',
+          previous_total: previous
+        }
+      },
+
+      top_countries: topCountries.rows,
+      top_us_states: topUSStates.rows,
+      top_links: topLinks.rows,
+      traffic_sources: trafficSources.rows,
+      devices: devices.rows,
+
+      timing: {
+        peak_hours: peakHours,
+        hourly_distribution: hourlyStats.rows,
+        daily_trend: dailyTrend.rows
+      },
+
+      // Pre-computed insights for AI
+      insights: {
+        best_performing_link: topLinks.rows[0] || null,
+        top_traffic_source: trafficSources.rows[0] || null,
+        primary_audience_country: topCountries.rows[0] || null,
+        primary_device: devices.rows[0] || null,
+        trend: changePercent > 20 ? 'growing_fast' : changePercent > 0 ? 'growing' : changePercent < -20 ? 'declining_fast' : changePercent < 0 ? 'declining' : 'stable'
+      }
+    });
+
+  } catch (e) {
+    console.error('AI Summary error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ═══ AI QUERY: Answer specific questions about analytics ═══
+app.get('/api/analytics/query', async (req, res) => {
+  try {
+    // API key authentication
+    const apiKey = req.headers['x-api-key'] || req.query.key;
+    const validKey = process.env.ANALYTICS_API_KEY;
+
+    if (!validKey || apiKey !== validKey) {
+      return res.status(401).json({ error: 'Invalid API key' });
+    }
+
+    const { q, days = 7 } = req.query;
+    if (!q) {
+      return res.status(400).json({ error: 'Missing query parameter "q"' });
+    }
+
+    const d = Math.min(parseInt(days), 90);
+    let result = null;
+
+    // Parse common questions
+    const query = q.toLowerCase();
+
+    if (query.includes('country') || query.includes('מדינ') || query.includes('איפה')) {
+      result = await pool.query(`
+        SELECT country, country_code, COUNT(*) as clicks,
+               ROUND(COUNT(*)::numeric * 100 / SUM(COUNT(*)) OVER(), 1) as percent
+        FROM analytics
+        WHERE clicked_at > NOW() - INTERVAL '${d} days'
+        GROUP BY country, country_code
+        ORDER BY clicks DESC
+        LIMIT 15
+      `);
+      return res.json({ question: q, type: 'countries', data: result.rows });
+    }
+
+    if (query.includes('state') || query.includes('סטייט') || query.includes('מדינות אמריקה')) {
+      result = await pool.query(`
+        SELECT region as state, COUNT(*) as clicks
+        FROM analytics
+        WHERE clicked_at > NOW() - INTERVAL '${d} days'
+          AND country_code = 'US' AND region IS NOT NULL
+        GROUP BY region
+        ORDER BY clicks DESC
+        LIMIT 15
+      `);
+      return res.json({ question: q, type: 'us_states', data: result.rows });
+    }
+
+    if (query.includes('link') || query.includes('לינק') || query.includes('ביצוע')) {
+      result = await pool.query(`
+        SELECT link_type, link_title, COUNT(*) as clicks
+        FROM analytics
+        WHERE clicked_at > NOW() - INTERVAL '${d} days'
+        GROUP BY link_type, link_title
+        ORDER BY clicks DESC
+        LIMIT 15
+      `);
+      return res.json({ question: q, type: 'links', data: result.rows });
+    }
+
+    if (query.includes('source') || query.includes('traffic') || query.includes('מקור') || query.includes('תנועה')) {
+      result = await pool.query(`
+        SELECT COALESCE(source, 'direct') as source, COUNT(*) as clicks
+        FROM analytics
+        WHERE clicked_at > NOW() - INTERVAL '${d} days'
+        GROUP BY source
+        ORDER BY clicks DESC
+        LIMIT 15
+      `);
+      return res.json({ question: q, type: 'sources', data: result.rows });
+    }
+
+    if (query.includes('hour') || query.includes('time') || query.includes('שעה') || query.includes('זמן') || query.includes('מתי')) {
+      result = await pool.query(`
+        SELECT EXTRACT(HOUR FROM clicked_at) as hour, COUNT(*) as clicks
+        FROM analytics
+        WHERE clicked_at > NOW() - INTERVAL '${d} days'
+        GROUP BY hour
+        ORDER BY hour
+      `);
+      return res.json({ question: q, type: 'hours', data: result.rows });
+    }
+
+    if (query.includes('device') || query.includes('מכשיר') || query.includes('mobile') || query.includes('desktop')) {
+      result = await pool.query(`
+        SELECT device, browser, os, COUNT(*) as clicks
+        FROM analytics
+        WHERE clicked_at > NOW() - INTERVAL '${d} days'
+        GROUP BY device, browser, os
+        ORDER BY clicks DESC
+        LIMIT 15
+      `);
+      return res.json({ question: q, type: 'devices', data: result.rows });
+    }
+
+    if (query.includes('today') || query.includes('היום')) {
+      result = await pool.query(`
+        SELECT COUNT(*) as clicks, COUNT(DISTINCT ip_address) as unique_visitors
+        FROM analytics
+        WHERE clicked_at > CURRENT_DATE
+      `);
+      return res.json({ question: q, type: 'today', data: result.rows[0] });
+    }
+
+    if (query.includes('yesterday') || query.includes('אתמול')) {
+      result = await pool.query(`
+        SELECT COUNT(*) as clicks, COUNT(DISTINCT ip_address) as unique_visitors
+        FROM analytics
+        WHERE clicked_at >= CURRENT_DATE - INTERVAL '1 day'
+          AND clicked_at < CURRENT_DATE
+      `);
+      return res.json({ question: q, type: 'yesterday', data: result.rows[0] });
+    }
+
+    // Default: return general stats
+    result = await pool.query(`
+      SELECT
+        COUNT(*) as total_clicks,
+        COUNT(DISTINCT ip_address) as unique_visitors,
+        COUNT(DISTINCT country_code) as countries
+      FROM analytics
+      WHERE clicked_at > NOW() - INTERVAL '${d} days'
+    `);
+    return res.json({ question: q, type: 'general', data: result.rows[0] });
+
+  } catch (e) {
+    console.error('Query error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ═══ DEBUG: Check analytics table ═══
 app.get('/api/analytics/debug', requireAuth, async (req, res) => {
   try {
