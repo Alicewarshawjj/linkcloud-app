@@ -1202,8 +1202,16 @@ function delCar(i) {
     markDirty();
 }
 
-// === IMAGE UPLOAD (Base64 - no server required) ===
-function resizeAndConvert(file, maxW, maxH) {
+// === IMAGE UPLOAD (High Quality Base64 - no server required) ===
+// Quality settings for crisp, professional images
+const IMAGE_SETTINGS = {
+    cover: { maxW: 1920, maxH: 720, quality: 0.95 },    // Full HD cover
+    avatar: { maxW: 500, maxH: 500, quality: 0.95 },    // High-res avatar
+    featured: { maxW: 1200, maxH: 600, quality: 0.93 }, // Featured links
+    carousel: { maxW: 800, maxH: 400, quality: 0.93 }   // Carousel items
+};
+
+function resizeAndConvert(file, maxW, maxH, quality = 0.95) {
     return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -1211,15 +1219,30 @@ function resizeAndConvert(file, maxW, maxH) {
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 let w = img.width, h = img.height;
+
+                // Only resize if image is larger than max dimensions
                 if (w > maxW || h > maxH) {
                     const ratio = Math.min(maxW / w, maxH / h);
                     w = Math.round(w * ratio);
                     h = Math.round(h * ratio);
                 }
+
                 canvas.width = w;
                 canvas.height = h;
-                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                resolve(canvas.toDataURL('image/jpeg', 0.92));
+
+                // Use high-quality image rendering
+                const ctx = canvas.getContext('2d');
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(img, 0, 0, w, h);
+
+                // Use PNG for images with transparency, JPEG for photos
+                const hasTransparency = file.type === 'image/png';
+                if (hasTransparency) {
+                    resolve(canvas.toDataURL('image/png'));
+                } else {
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                }
             };
             img.src = e.target.result;
         };
@@ -1231,11 +1254,13 @@ async function uploadImage(input, type) {
     const file = input.files[0];
     if (!file) return;
 
-    const maxW = type === 'cover' ? 800 : 200;
-    const maxH = type === 'cover' ? 300 : 200;
+    const settings = IMAGE_SETTINGS[type] || IMAGE_SETTINGS.featured;
+    const maxW = settings.maxW;
+    const maxH = settings.maxH;
+    const quality = settings.quality;
 
     try {
-        const dataUrl = await resizeAndConvert(file, maxW, maxH);
+        const dataUrl = await resizeAndConvert(file, maxW, maxH, quality);
         const img = document.getElementById(type + 'Img');
         img.src = dataUrl;
         img.style.display = 'block';
@@ -1243,7 +1268,7 @@ async function uploadImage(input, type) {
         document.getElementById(type + 'Zone').classList.add('has-image');
         document.getElementById(type + 'Position').style.display = 'block';
         markDirty();
-        showToast('Image ready!');
+        showToast('High quality image ready!');
     } catch(e) {
         console.error('Upload error:', e);
         showToast('Upload failed!');
@@ -1254,14 +1279,15 @@ async function uploadFeatImage(input, index) {
     const file = input.files[0];
     if (!file) return;
 
+    const settings = IMAGE_SETTINGS.featured;
     try {
-        const dataUrl = await resizeAndConvert(file, 600, 300);
-        feats[index].image = dataUrl;
+        const dataUrl = await resizeAndConvert(file, settings.maxW, settings.maxH, settings.quality);
+        feats[index].imgUrl = dataUrl;  // Fixed: was 'image', should be 'imgUrl'
         document.getElementById('featImg' + index).src = dataUrl;
         document.getElementById('featImg' + index).style.display = 'block';
         document.getElementById('featPlaceholder' + index).style.display = 'none';
         markDirty();
-        showToast('Image ready!');
+        showToast('High quality image ready!');
     } catch(e) {
         console.error('Upload error:', e);
         showToast('Upload failed!');
@@ -1272,9 +1298,10 @@ async function uploadCarImage(input, index) {
     const file = input.files[0];
     if (!file) return;
 
+    const settings = IMAGE_SETTINGS.carousel;
     try {
-        const dataUrl = await resizeAndConvert(file, 600, 300);
-        cars[index].image = dataUrl;
+        const dataUrl = await resizeAndConvert(file, settings.maxW, settings.maxH, settings.quality);
+        cars[index].imgUrl = dataUrl;  // Fixed: consistent naming
         document.getElementById('carImg' + index).src = dataUrl;
         document.getElementById('carImg' + index).style.display = 'block';
         document.getElementById('carPlaceholder' + index).style.display = 'none';
