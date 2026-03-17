@@ -1428,57 +1428,10 @@ a{color:#fff;margin-top:20px}
 });
 
 // ═══ FACEBOOK DEDICATED ROUTE ═══
-// Facebook blocks URL schemes - show instructions to open in Safari manually
+// Facebook has its own "Open in Browser" option - show page WITHOUT blur overlay
+// User sees normal page → taps FB's native "Open in Browser" button
 app.get('/facebook', (req, res) => {
-  if (req.query.browser === '1') {
-    return res.redirect('/');
-  }
-  // Facebook-specific: Guide user to tap the 3 dots menu → "Open in Safari"
-  res.send(`<!DOCTYPE html>
-<html><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Open in Safari</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;min-height:100vh;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);color:#fff;padding:20px;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.container{text-align:center;max-width:340px;width:100%}
-.arrow{font-size:60px;animation:bounce 1s infinite;margin-bottom:10px}
-@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-h1{font-size:24px;margin:20px 0 12px;font-weight:700}
-.step{background:rgba(255,255,255,0.1);border-radius:12px;padding:16px;margin:12px 0;text-align:left;font-size:15px;line-height:1.6}
-.step-num{display:inline-block;width:24px;height:24px;background:#0095f6;border-radius:50%;text-align:center;line-height:24px;font-size:13px;font-weight:700;margin-right:10px}
-.dots{font-size:20px;letter-spacing:2px}
-.or{margin:24px 0 16px;font-size:13px;opacity:0.6}
-.btn{display:block;width:100%;padding:16px;background:#0095f6;color:#fff;text-decoration:none;border-radius:12px;font-size:17px;font-weight:600}
-.copy-btn{background:rgba(255,255,255,0.15);margin-top:12px;border:1px solid rgba(255,255,255,0.2)}
-.url-box{background:rgba(0,0,0,0.3);border-radius:8px;padding:12px;margin:16px 0;font-size:13px;word-break:break-all;font-family:monospace}
-</style>
-</head><body>
-<div class="container">
-<div class="arrow">☝️</div>
-<h1>Open in Safari</h1>
-<div class="step"><span class="step-num">1</span>Tap <span class="dots">•••</span> at the top right</div>
-<div class="step"><span class="step-num">2</span>Select <strong>"Open in Safari"</strong> or <strong>"Open in Browser"</strong></div>
-<div class="or">— or copy the link —</div>
-<div class="url-box" id="urlBox">https://cmehere.net</div>
-<button class="btn copy-btn" onclick="copyUrl()">📋 Copy Link</button>
-<a href="https://cmehere.net/?browser=1" class="btn" style="margin-top:24px">Continue in Facebook Browser</a>
-</div>
-<script>
-function copyUrl(){
-  var url='https://cmehere.net';
-  if(navigator.clipboard&&navigator.clipboard.writeText){
-    navigator.clipboard.writeText(url).then(function(){
-      document.querySelector('.copy-btn').textContent='✅ Copied!';
-      setTimeout(function(){document.querySelector('.copy-btn').textContent='📋 Copy Link'},2000);
-    });
-  }else{
-    prompt('Copy this link:',url);
-  }
-}
-</script>
-</body></html>`);
+  res.redirect('/?noblur=1');
 });
 
 // ═══ TRAFFIC SOURCE ROUTE (Clean URLs: /ig-main, /twitter1, etc.) ═══
@@ -1643,7 +1596,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   ${p.avatarUrl ? `<meta name="twitter:image" content="${esc(p.avatarUrl)}">` : ''}
   <link rel="icon" href="/favicon.ico">
   <script id="early-deeplink-detect">
-  (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';var ref=document.referrer||'';window.__IS_INAPP__=ua.indexOf('Instagram')!==-1||ua.indexOf('FBAN')!==-1||ua.indexOf('FBAV')!==-1||ua.indexOf('TikTok')!==-1||ua.indexOf('LinkedInApp')!==-1||ua.indexOf('Twitter')!==-1||ua.indexOf('TwitterAndroid')!==-1||ua.indexOf('Threads')!==-1||ua.indexOf('Barcelona')!==-1||ref.indexOf('t.co')!==-1||ref.indexOf('twitter.com')!==-1||ref.indexOf('x.com')!==-1||ref.indexOf('threads.net')!==-1;window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua)}catch(e){}})();
+  (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';var ref=document.referrer||'';var params=new URLSearchParams(window.location.search);if(params.get('noblur')==='1'){window.__IS_INAPP__=false}else{window.__IS_INAPP__=ua.indexOf('Instagram')!==-1||ua.indexOf('FBAN')!==-1||ua.indexOf('FBAV')!==-1||ua.indexOf('TikTok')!==-1||ua.indexOf('LinkedInApp')!==-1||ua.indexOf('Twitter')!==-1||ua.indexOf('TwitterAndroid')!==-1||ua.indexOf('Threads')!==-1||ua.indexOf('Barcelona')!==-1||ref.indexOf('t.co')!==-1||ref.indexOf('twitter.com')!==-1||ref.indexOf('x.com')!==-1||ref.indexOf('threads.net')!==-1}window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua)}catch(e){}})();
   </script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
