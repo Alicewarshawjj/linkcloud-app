@@ -1372,13 +1372,78 @@ app.get('/go/:encodedLink', async (req, res) => {
 <noscript><meta http-equiv="refresh" content="0;url=${escapedUrl}"></noscript>
 </body></html>`);
     } else {
-      // Standard redirect for other links (Instagram, etc.)
-      res.status(200).send(`<!DOCTYPE html>
+      // Check if it's Facebook in-app browser
+      const isFacebookiOS = /FBAN|FBAV/i.test(user_agent) && /iPhone|iPad|iPod/i.test(user_agent);
+      const isFacebookAndroid = /FBAN|FBAV/i.test(user_agent) && /Android/i.test(user_agent);
+
+      if (isFacebookiOS) {
+        // Facebook iOS: WKWebView blocks external URLs
+        // Show a clean page with a button to copy/open the link
+        const escapedUrl = url.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        res.status(200).send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Open Link</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+.card{background:#1a1a1a;border-radius:20px;padding:32px 24px;text-align:center;max-width:340px;width:100%}
+.icon{font-size:48px;margin-bottom:16px}
+h2{font-size:20px;margin-bottom:8px}
+.subtitle{color:#888;font-size:14px;margin-bottom:24px}
+.btn{display:block;width:100%;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;padding:16px;border-radius:12px;font-size:17px;font-weight:600;border:none;cursor:pointer;margin-bottom:12px}
+.btn:active{opacity:0.9;transform:scale(0.98)}
+.btn-secondary{background:#333;margin-bottom:0}
+.hint{margin-top:20px;font-size:12px;color:#666;line-height:1.5}
+.copied{background:#00c853 !important}
+</style>
+</head>
+<body>
+<div class="card">
+<div class="icon">🔗</div>
+<h2>${safeTitle || 'External Link'}</h2>
+<p class="subtitle">Tap to open this link</p>
+<a class="btn" href="${escapedUrl}" target="_blank" rel="noopener">Open Link →</a>
+<button class="btn btn-secondary" onclick="copyLink()">Copy Link</button>
+<p class="hint">If the button doesn't work:<br>Tap <strong>⋯</strong> → <strong>Open in Safari</strong></p>
+</div>
+<script>
+function copyLink(){
+  var url="${url.replace(/"/g, '\\"').replace(/\\/g, '\\\\')}";
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(function(){
+      var btn=document.querySelector('.btn-secondary');
+      btn.textContent='Copied! ✓';
+      btn.classList.add('copied');
+    });
+  }else{
+    prompt('Copy this link:',url);
+  }
+}
+</script>
+</body></html>`);
+      } else if (isFacebookAndroid) {
+        // Facebook Android: Use intent scheme
+        const escapedUrl = url.replace(/"/g, '&quot;');
+        res.status(200).send(`<!DOCTYPE html>
+<html><head>
+<meta name="robots" content="noindex,nofollow">
+<script>
+window.location.href='intent://${url.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;end';
+setTimeout(function(){window.location.href="${url.replace(/"/g, '\\"')}";},1500);
+</script>
+</head><body style="background:#0a0a14"></body></html>`);
+      } else {
+        // Standard redirect for other links (Instagram, etc.)
+        res.status(200).send(`<!DOCTYPE html>
 <html><head>
 <meta name="robots" content="noindex,nofollow">
 <meta http-equiv="refresh" content="0;url=${url.replace(/"/g, '&quot;')}">
 <script>window.location.replace("${url.replace(/"/g, '\\"').replace(/\\/g, '\\\\')}");</script>
 </head><body style="background:#0a0a14"></body></html>`);
+      }
     }
   } catch (e) {
     // Don't fail the redirect just because analytics failed
@@ -1470,53 +1535,11 @@ app.get('/', async (req, res) => {
       return res.status(200).send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="2"><title>Loading...</title></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0a14;color:#fff;font-family:system-ui"><div style="text-align:center"><div style="font-size:48px;margin-bottom:16px">⏳</div><h1>Starting up...</h1><p style="color:#888">Please wait a moment</p></div></body></html>`);
     }
 
-    const userAgent = req.headers['user-agent'] || '';
-
-    // ═══ FACEBOOK SPECIAL HANDLING ═══
-    // Facebook WKWebView blocks URL schemes, so the blur overlay doesn't work
-    // Instead, show a clean landing page with a direct button (no blur)
-    const isFacebookiOS = /FBAN|FBAV/i.test(userAgent) && /iPhone|iPad|iPod/i.test(userAgent);
-    const isFacebookAndroid = /FBAN|FBAV/i.test(userAgent) && /Android/i.test(userAgent);
-
-    if (isFacebookiOS && req.query.noblur !== '1') {
-      // Facebook iOS: Show clean landing page WITHOUT blur overlay
-      return res.send(`<!DOCTYPE html>
-<html><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>cmehere.net</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;padding-bottom:env(safe-area-inset-bottom)}
-.logo{font-size:56px;margin-bottom:28px}
-h1{font-size:32px;font-weight:700;margin-bottom:12px}
-.subtitle{color:#888;font-size:16px;margin-bottom:48px}
-.cta{display:block;width:100%;max-width:320px;background:linear-gradient(135deg,#00c6ff 0%,#0072ff 100%);color:#fff;text-decoration:none;padding:20px 36px;border-radius:16px;font-size:19px;font-weight:600;text-align:center;box-shadow:0 8px 32px rgba(0,114,255,0.4);transition:transform 0.15s,box-shadow 0.15s}
-.cta:active{transform:scale(0.97);box-shadow:0 4px 16px rgba(0,114,255,0.3)}
-.hint{margin-top:32px;font-size:13px;color:#666;text-align:center;line-height:1.6}
-.hint strong{color:#888}
-</style>
-</head>
-<body>
-<div class="logo">🔗</div>
-<h1>cmehere.net</h1>
-<p class="subtitle">Tap to continue</p>
-<a class="cta" href="https://cmehere.net/?noblur=1">Open Site →</a>
-<p class="hint">If nothing happens, tap <strong>⋯</strong> above<br>then <strong>"Open in Safari"</strong></p>
-</body></html>`);
-    }
-
-    if (isFacebookAndroid) {
-      // Facebook Android: Use intent scheme
-      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-<script>window.location.href='intent://cmehere.net/?noblur=1#Intent;scheme=https;package=com.android.chrome;end';</script>
-</head><body></body></html>`);
-    }
-
     const result = await pool.query('SELECT content, seo FROM sites WHERE slug = $1', ['main']);
     if (result.rows.length === 0) return res.redirect('/admin');
     const data = result.rows[0].content;
     const seo = result.rows[0].seo || {};
+    const userAgent = req.headers['user-agent'] || '';
 
     // Bot detection
     const isBotRequest = isBot(userAgent, req);
@@ -1525,7 +1548,12 @@ h1{font-size:32px;font-weight:700;margin-bottom:12px}
     const geoInfo = getCountryFromIP(req);
     const isGeoBlocked = geoInfo.countryCode === 'IL';
 
-    res.send(renderProfilePage(data, seo, isBotRequest, null, isGeoBlocked));
+    // ═══ FACEBOOK SPECIAL HANDLING ═══
+    // Facebook users see the page normally (no blur overlay)
+    // The magic happens when they CLICK a link - /go/ route handles Facebook specially
+    const isFacebook = /FBAN|FBAV/i.test(userAgent);
+
+    res.send(renderProfilePage(data, seo, isBotRequest, null, isGeoBlocked, isFacebook));
   } catch (e) {
     console.error('Render error:', e);
     res.status(500).send('Server error');
@@ -1837,7 +1865,7 @@ app.get('/:source', async (req, res, next) => {
 });
 
 // ═══ PROFILE RENDERER (Link Protection) ═══
-function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, isGeoBlocked = false) {
+function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, isGeoBlocked = false, isFacebook = false) {
   const p = data.profile || {};
   const socials = data.socials || [];
   // Hide exclusive content (featured & carousel) for geo-blocked visitors
@@ -1958,7 +1986,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   ${p.avatarUrl ? `<meta name="twitter:image" content="${esc(p.avatarUrl)}">` : ''}
   <link rel="icon" href="/favicon.ico">
   <script id="early-deeplink-detect">
-  (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';var ref=document.referrer||'';var params=new URLSearchParams(window.location.search);if(params.get('noblur')==='1'){window.__IS_INAPP__=false}else{window.__IS_INAPP__=ua.indexOf('Instagram')!==-1||ua.indexOf('FBAN')!==-1||ua.indexOf('FBAV')!==-1||ua.indexOf('TikTok')!==-1||ua.indexOf('LinkedInApp')!==-1||ua.indexOf('Twitter')!==-1||ua.indexOf('TwitterAndroid')!==-1||ua.indexOf('Threads')!==-1||ua.indexOf('Barcelona')!==-1||ref.indexOf('t.co')!==-1||ref.indexOf('twitter.com')!==-1||ref.indexOf('x.com')!==-1||ref.indexOf('threads.net')!==-1}window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua)}catch(e){}})();
+  (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';var ref=document.referrer||'';var params=new URLSearchParams(window.location.search);var isFacebookServer=${isFacebook};if(params.get('noblur')==='1'||isFacebookServer){window.__IS_INAPP__=false}else{window.__IS_INAPP__=ua.indexOf('Instagram')!==-1||ua.indexOf('TikTok')!==-1||ua.indexOf('LinkedInApp')!==-1||ua.indexOf('Twitter')!==-1||ua.indexOf('TwitterAndroid')!==-1||ua.indexOf('Threads')!==-1||ua.indexOf('Barcelona')!==-1||ref.indexOf('t.co')!==-1||ref.indexOf('twitter.com')!==-1||ref.indexOf('x.com')!==-1||ref.indexOf('threads.net')!==-1}window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua)}catch(e){}})();
   </script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
