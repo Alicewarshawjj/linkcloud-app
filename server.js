@@ -309,9 +309,19 @@ const COUNTRY_NAMES = {
 
 // Get geolocation from Cloudflare/CDN headers (BEST - instant, free, accurate)
 function getGeoFromRequest(req) {
+  // Debug: Log all relevant headers
+  console.log('🌍 GEO DEBUG - CF-IPCountry:', req.headers['cf-ipcountry']);
+  console.log('🌍 GEO DEBUG - All CF headers:', {
+    'cf-ipcountry': req.headers['cf-ipcountry'],
+    'cf-ipcity': req.headers['cf-ipcity'],
+    'cf-ray': req.headers['cf-ray'],
+    'cf-connecting-ip': req.headers['cf-connecting-ip']
+  });
+
   // Cloudflare headers
   const cfCountry = req.headers['cf-ipcountry'];
   if (cfCountry && cfCountry !== 'XX' && cfCountry !== 'T1') {
+    console.log('✅ GEO: Using Cloudflare header:', cfCountry);
     return {
       country: COUNTRY_NAMES[cfCountry] || cfCountry,
       countryCode: cfCountry,
