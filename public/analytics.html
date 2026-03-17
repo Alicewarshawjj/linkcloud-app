@@ -235,6 +235,31 @@
       100% { transform: rotate(360deg); }
     }
 
+    /* Stats Row */
+    .stats-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .stat-item {
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 10px;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .stat-name {
+      color: rgba(255,255,255,.8);
+      font-size: 14px;
+    }
+    .stat-count {
+      color: #667eea;
+      font-weight: 700;
+      font-size: 16px;
+    }
+
     /* Empty State */
     .empty-state {
       text-align: center;
@@ -318,7 +343,7 @@
     }
 
     function renderAnalytics(data) {
-      const { total, byType, topLinks, daily } = data;
+      const { total, byType, topLinks, daily, byCountry, byOS, byBrowser, byDevice, recent } = data;
 
       if (total === 0) {
         document.getElementById('content').innerHTML = `
@@ -372,6 +397,41 @@
             ${renderTopLinksTable(topLinks)}
           </div>
         </div>
+
+        <div class="section">
+          <div class="section-title">🌍 By Country</div>
+          <div class="table-wrapper">
+            ${renderCountryTable(byCountry)}
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">📱 By Device</div>
+          <div class="stats-row">
+            ${renderStatsList(byDevice)}
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">💻 By OS</div>
+          <div class="stats-row">
+            ${renderStatsList(byOS)}
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">🌐 By Browser</div>
+          <div class="stats-row">
+            ${renderStatsList(byBrowser)}
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">🕐 Recent Clicks</div>
+          <div class="table-wrapper">
+            ${renderRecentTable(recent)}
+          </div>
+        </div>
       `;
 
       document.getElementById('content').innerHTML = html;
@@ -419,6 +479,83 @@
               <th>Link</th>
               <th>Type</th>
               <th style="text-align:right;">Clicks</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    function renderCountryTable(countries) {
+      if (!countries || countries.length === 0) return '<p style="color:rgba(255,255,255,.4);text-align:center;padding:20px;">No country data yet</p>';
+
+      const rows = countries.map(c => `
+        <tr>
+          <td style="font-size:20px;">${getFlag(c.country_code)}</td>
+          <td>${c.country || 'Unknown'}</td>
+          <td style="text-align:right;font-weight:700;color:#667eea;">${c.clicks}</td>
+        </tr>
+      `).join('');
+
+      return `
+        <table>
+          <thead>
+            <tr>
+              <th style="width:40px;"></th>
+              <th>Country</th>
+              <th style="text-align:right;">Clicks</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    function getFlag(code) {
+      if (!code || code === 'XX') return '🌍';
+      const codePoints = code.toUpperCase().split('').map(char => 127397 + char.charCodeAt());
+      return String.fromCodePoint(...codePoints);
+    }
+
+    function renderStatsList(items) {
+      if (!items || items.length === 0) return '<p style="color:rgba(255,255,255,.4);text-align:center;padding:20px;">No data</p>';
+
+      return items.map(item => {
+        const name = item.os || item.browser || item.device || 'Unknown';
+        return `
+          <div class="stat-item">
+            <span class="stat-name">${name}</span>
+            <span class="stat-count">${item.clicks}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderRecentTable(recent) {
+      if (!recent || recent.length === 0) return '<p style="color:rgba(255,255,255,.4);text-align:center;padding:20px;">No recent clicks</p>';
+
+      const rows = recent.map(r => {
+        const time = new Date(r.clicked_at).toLocaleString('en-US', {
+          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+        return `
+          <tr>
+            <td>${r.link_title || 'Link'}</td>
+            <td>${getFlag(r.country_code)} ${r.country || 'Unknown'}</td>
+            <td>${r.device || '-'}</td>
+            <td style="color:rgba(255,255,255,.5);font-size:12px;">${time}</td>
+          </tr>
+        `;
+      }).join('');
+
+      return `
+        <table>
+          <thead>
+            <tr>
+              <th>Link</th>
+              <th>Location</th>
+              <th>Device</th>
+              <th>Time</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
