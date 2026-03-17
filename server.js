@@ -1377,83 +1377,40 @@ app.get('/go/:encodedLink', async (req, res) => {
       const isFacebookAndroid = /FBAN|FBAV/i.test(user_agent) && /Android/i.test(user_agent);
 
       if (isFacebookiOS) {
-        // Facebook iOS: WKWebView blocks external URLs
-        // Try multiple methods to escape - user tap triggers all attempts
-        const escapedUrl = url.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        // Facebook iOS: Use the EXACT same 5-method approach with 400ms delays
+        // This is the logic that worked - auto-triggers on page load
         const jsUrl = url.replace(/"/g, '\\"').replace(/\\/g, '\\\\');
-        const strippedUrl = url.replace(/^https?:\/\//, '');
         res.status(200).send(`<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>Opening...</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
-.card{background:#1a1a1a;border-radius:20px;padding:32px 24px;text-align:center;max-width:340px;width:100%}
-.icon{font-size:48px;margin-bottom:16px}
-h2{font-size:20px;margin-bottom:8px}
-.subtitle{color:#888;font-size:14px;margin-bottom:24px}
-.btn{display:block;width:100%;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;padding:16px;border-radius:12px;font-size:17px;font-weight:600;border:none;cursor:pointer;margin-bottom:12px}
-.btn:active{opacity:0.9;transform:scale(0.98)}
-.btn-secondary{background:#333;margin-bottom:0}
-.hint{margin-top:20px;font-size:12px;color:#666;line-height:1.5}
-.copied{background:#00c853 !important}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#000;color:#fff}
+.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+p{margin-top:20px;opacity:0.7}
+a{color:#fff;margin-top:20px}
 </style>
-</head>
-<body>
-<div class="card">
-<div class="icon">🔗</div>
-<h2>${safeTitle || 'External Link'}</h2>
-<p class="subtitle">Tap to open this link</p>
-<button class="btn" id="openBtn" onclick="tryOpen()">Open Link →</button>
-<button class="btn btn-secondary" onclick="copyLink()">Copy Link</button>
-<p class="hint">If the button doesn't work:<br>Tap <strong>⋯</strong> → <strong>Open in Safari</strong></p>
-</div>
+</head><body>
+<div class="spinner"></div>
+<p>Opening in browser...</p>
+<a href="${url.replace(/"/g, '&quot;')}">Tap here if nothing happens</a>
 <script>
-var targetUrl = "${jsUrl}";
-var strippedUrl = "${strippedUrl}";
-
-function tryOpen() {
-  // Method 1: Try x-safari-https (works in some WebViews)
-  var xSafari = 'x-safari-https://' + strippedUrl;
-
-  // Method 2: Create a hidden link and click it
-  var link = document.createElement('a');
-  link.href = targetUrl;
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
-
-  // Method 3: window.open
-  var win = window.open(targetUrl, '_blank');
-
-  // Method 4: Try x-safari after a delay
-  setTimeout(function() {
-    window.location.href = xSafari;
-  }, 100);
-
-  // Method 5: Direct location as final fallback
-  setTimeout(function() {
-    window.location.href = targetUrl;
-  }, 500);
-
-  // Click the hidden link
-  document.body.appendChild(link);
-  link.click();
-}
-
-function copyLink(){
-  if(navigator.clipboard&&navigator.clipboard.writeText){
-    navigator.clipboard.writeText(targetUrl).then(function(){
-      var btn=document.querySelector('.btn-secondary');
-      btn.textContent='Copied! ✓';
-      btn.classList.add('copied');
-    });
-  }else{
-    prompt('Copy this link:',targetUrl);
-  }
-}
+(function(){
+  var url="${jsUrl}";
+  var methods=[
+    function(){window.location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},
+    function(){var s=url.replace(/^https?:\\/\\//,'');window.location.href='x-safari-https://'+s},
+    function(){var w=window.open('about:blank','_blank');if(w){setTimeout(function(){w.location.href=url},100)}},
+    function(){var a=document.createElement('a');a.href=url;a.target='_system';a.click()},
+    function(){window.open(url,'_system')}
+  ];
+  var i=0;
+  function tryNext(){if(i<methods.length){try{methods[i]()}catch(e){}i++;setTimeout(tryNext,400)}}
+  tryNext();
+})();
 </script>
 </body></html>`);
       } else if (isFacebookAndroid) {
