@@ -1368,8 +1368,8 @@ app.get('/', async (req, res) => {
 });
 
 // ═══ FACEBOOK ESCAPE: Dedicated route for Facebook in-app browser ═══
-// STRATEGY: Use Smart App Banner meta tag + multiple escape methods
-// The Smart App Banner triggers iOS native "Open in App?" dialog
+// STRATEGY: Multiple Universal Link attempts with auto-redirect chain
+// Try to trigger iOS "Open in App?" dialog through various app Universal Links
 app.get('/fb', (req, res) => {
   const ua = req.headers['user-agent'] || '';
   const isFacebook = ua.includes('FBAN') || ua.includes('FBAV');
@@ -1383,89 +1383,96 @@ app.get('/fb', (req, res) => {
 
   const targetUrl = `https://${req.hostname}/?browser=1`;
 
-  // Multiple escape URLs to try
-  const youtubeUrl = `https://www.youtube.com/redirect?q=${encodeURIComponent(targetUrl)}`;
-  const twitterUrl = `https://t.co/redirect?url=${encodeURIComponent(targetUrl)}`;
-
   res.send(`<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<!-- Smart App Banner for Safari - triggers iOS dialog -->
-<meta name="apple-itunes-app" content="app-id=389801252">
-<title>Continue</title>
+<title>Opening...</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#000;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.box{max-width:320px;width:100%;text-align:center}
-h1{font-size:22px;margin-bottom:10px;font-weight:600}
-.sub{color:#888;font-size:14px;margin-bottom:24px;line-height:1.4}
-.btn{display:block;width:100%;padding:16px;background:#0095f6;color:#fff;text-decoration:none;border-radius:12px;font-size:16px;font-weight:600;border:none;cursor:pointer;margin-bottom:10px;-webkit-tap-highlight-color:transparent}
-.btn:active{transform:scale(0.98)}
-.btn2{background:#262626}
-.btn3{background:transparent;border:1px solid #363636;color:#888;font-size:14px}
-.methods{margin-top:20px;text-align:left;background:#111;padding:16px;border-radius:12px}
-.methods h3{font-size:12px;color:#666;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px}
-.method{display:flex;align-items:center;padding:10px 0;border-bottom:1px solid #222}
-.method:last-child{border-bottom:none}
-.method-num{width:24px;height:24px;background:#333;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;margin-right:12px;flex-shrink:0}
-.method-text{font-size:13px;color:#aaa}
-.method-text b{color:#fff}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#000;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.c{text-align:center;padding:20px}
+.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 20px}
+@keyframes spin{to{transform:rotate(360deg)}}
+h1{font-size:18px;font-weight:500;margin-bottom:8px}
+p{color:#666;font-size:14px;margin-bottom:24px}
+.btn{display:inline-block;padding:14px 28px;background:#0095f6;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600}
+.btn:active{opacity:0.8}
+.alt{margin-top:20px}
+.alt a{color:#0095f6;text-decoration:none;font-size:14px}
 </style>
 </head><body>
-<div class="box">
-  <h1>Open in Safari</h1>
-  <p class="sub">Facebook blocks external links. Use one of these methods:</p>
-
-  <a class="btn" href="${youtubeUrl}" id="ytBtn">Open via YouTube →</a>
-  <a class="btn btn2" href="${twitterUrl}" id="twBtn">Open via Twitter →</a>
-  <button class="btn btn3" id="copyBtn">📋 Copy Link</button>
-
-  <div class="methods">
-    <h3>Manual Method</h3>
-    <div class="method">
-      <span class="method-num">1</span>
-      <span class="method-text">Tap <b>⋯</b> at bottom right</span>
-    </div>
-    <div class="method">
-      <span class="method-num">2</span>
-      <span class="method-text">Select <b>"Open in Safari"</b></span>
-    </div>
+<div class="c">
+  <div class="spinner"></div>
+  <h1>Opening link...</h1>
+  <p>If nothing happens, tap below</p>
+  <a class="btn" href="${targetUrl}" id="openBtn" target="_blank" rel="noopener">Open Link</a>
+  <div class="alt">
+    <a href="#" id="copyBtn">Copy link instead</a>
   </div>
 </div>
 <script>
 (function(){
-  var targetUrl="${targetUrl}";
+  var target="${targetUrl}";
   var ua=navigator.userAgent||'';
+  var isIOS=/iPhone|iPad|iPod/i.test(ua);
   var isAndroid=/Android/i.test(ua);
 
-  // Try to auto-open via location change
-  setTimeout(function(){
-    // Try the youtube redirect first
-    window.location.href="${youtubeUrl}";
-  }, 800);
+  // For Android: intent scheme works reliably
+  if(isAndroid){
+    var intent='intent://'+target.replace(/^https?:\\/\\//,'')+'#Intent;scheme=https;action=android.intent.action.VIEW;end';
+    window.location.href=intent;
+    return;
+  }
 
+  // For iOS: Try multiple methods in sequence
+  var methods=[
+    // Method 1: Try x-safari-https scheme (iOS 17+)
+    function(){
+      var safariUrl=target.replace(/^https/,'x-safari-https');
+      var a=document.createElement('a');
+      a.href=safariUrl;
+      a.click();
+    },
+    // Method 2: Try googlechrome scheme
+    function(){
+      var chromeUrl=target.replace(/^https/,'googlechromes');
+      window.location.href=chromeUrl;
+    },
+    // Method 3: window.open with _blank
+    function(){
+      var w=window.open(target,'_blank','noopener,noreferrer');
+      if(!w){
+        // Popup blocked, try location
+        window.location.href=target;
+      }
+    }
+  ];
+
+  var i=0;
+  function tryNext(){
+    if(i<methods.length){
+      try{methods[i]();}catch(e){}
+      i++;
+      setTimeout(tryNext,600);
+    }
+  }
+
+  // Start trying methods after small delay
+  setTimeout(tryNext,300);
+
+  // Copy button handler
   document.getElementById('copyBtn').onclick=function(e){
     e.preventDefault();
     if(navigator.clipboard){
-      navigator.clipboard.writeText(targetUrl).then(function(){
-        alert('Link copied! Open Safari and paste.');
+      navigator.clipboard.writeText(target).then(function(){
+        alert('Link copied! Paste in Safari.');
       });
     }else{
-      prompt('Copy this link:',targetUrl);
+      prompt('Copy:',target);
     }
   };
-
-  // Android: use intent scheme
-  if(isAndroid){
-    var intentUrl='intent://'+targetUrl.replace(/^https?:\\/\\//,'')+'#Intent;scheme=https;end';
-    document.getElementById('ytBtn').href=intentUrl;
-    document.getElementById('twBtn').href=intentUrl;
-    setTimeout(function(){
-      window.location.href=intentUrl;
-    },500);
-  }
 })();
 </script>
 </body></html>`);
