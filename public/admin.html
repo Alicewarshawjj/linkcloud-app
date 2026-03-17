@@ -700,7 +700,7 @@ async function checkAuth() {
 // === ANALYTICS ===
 async function loadAnalyticsBadge() {
     try {
-        const res = await fetch('/api/analytics?days=30', {credentials:'same-origin'});
+        const res = await fetch('/api/analytics/stats?days=30', {credentials:'same-origin'});
         if (res.ok) {
             const data = await res.json();
             document.getElementById('navClicksBadge').textContent = data.total || 0;
@@ -724,9 +724,10 @@ async function loadAnalytics() {
     }[currentTimeRange] || 30;
 
     try {
-        const res = await fetch(`/api/analytics?days=${days}`, {credentials:'same-origin'});
+        const res = await fetch(`/api/analytics/stats?days=${days}`, {credentials:'same-origin'});
         if (!res.ok) throw new Error('Failed to load');
         analyticsData = await res.json();
+        console.log('Analytics data:', analyticsData);
         renderAnalytics(days);
     } catch(e) {
         console.error('Analytics error:', e);
@@ -744,20 +745,38 @@ function renderAnalytics(days) {
     document.getElementById('analyticsDateRange').textContent =
         `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()} (${data.total} total clicks)`;
 
+    // Parse byType array into object
+    const byTypeObj = {};
+    (data.byType || []).forEach(t => {
+        byTypeObj[t.link_type] = parseInt(t.clicks);
+    });
+
     // Stats
     document.getElementById('statTotalClicks').textContent = formatNumber(data.total || 0);
-    document.getElementById('statSocialClicks').textContent = formatNumber(data.byType?.social || 0);
-    document.getElementById('statFeaturedClicks').textContent = formatNumber(data.byType?.featured || 0);
-    document.getElementById('statCarouselClicks').textContent = formatNumber(data.byType?.carousel || 0);
+    document.getElementById('statSocialClicks').textContent = formatNumber(byTypeObj.social || 0);
+    document.getElementById('statFeaturedClicks').textContent = formatNumber(byTypeObj.featured || 0);
+    document.getElementById('statCarouselClicks').textContent = formatNumber(byTypeObj.carousel || 0);
 
-    // Chart
-    renderChart(data.byDay || [], days);
+    // Chart - API returns 'daily' not 'byDay'
+    renderChart(data.daily || [], days);
 
     // Countries
     renderCountries(data.byCountry || []);
 
-    // Devices
-    renderDevices(data.byDevice || {}, data.byBrowser || {}, data.byOS || {});
+    // Devices - convert array to object
+    const deviceObj = {};
+    (data.byDevice || []).forEach(d => {
+        deviceObj[d.device?.toLowerCase()] = parseInt(d.clicks);
+    });
+    const browserObj = {};
+    (data.byBrowser || []).forEach(b => {
+        browserObj[b.browser] = parseInt(b.clicks);
+    });
+    const osObj = {};
+    (data.byOS || []).forEach(o => {
+        osObj[o.os] = parseInt(o.clicks);
+    });
+    renderDevices(deviceObj, browserObj, osObj);
 
     // Live Feed
     renderLiveFeed(data.recent || []);
@@ -785,7 +804,9 @@ function renderChart(byDay, days) {
     const dateMap = {};
 
     byDay.forEach(d => {
-        dateMap[d.date] = d.clicks;
+        // Handle different date formats from API
+        const dateKey = d.date ? (typeof d.date === 'string' ? d.date.split('T')[0] : new Date(d.date).toISOString().split('T')[0]) : '';
+        dateMap[dateKey] = parseInt(d.clicks);
     });
 
     for (let i = days - 1; i >= 0; i--) {
