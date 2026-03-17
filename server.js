@@ -1457,10 +1457,15 @@ app.get('/:source', async (req, res, next) => {
       return res.redirect('/');
     }
 
-    // Check if source needs force browser open (ends with -force)
+    const result = await pool.query('SELECT content, seo FROM sites WHERE slug = $1', ['main']);
+    if (result.rows.length === 0) return res.redirect('/admin');
+    const data = result.rows[0].content;
+    const seo = result.rows[0].seo || {};
+
+    // Check if this source needs force browser open (from DB setting)
     // AND user hasn't already been redirected (no ?browser=1)
-    if (cleanSource.endsWith('-force') && req.query.browser !== '1') {
-      // Return auto-open page (same as /reddit and /threads)
+    const forceBrowserSources = data.forceBrowserSources || [];
+    if (forceBrowserSources.includes(cleanSource) && req.query.browser !== '1') {
       return res.send(`<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
@@ -1503,10 +1508,6 @@ a{color:#fff;margin-top:20px}
 </body></html>`);
     }
 
-    const result = await pool.query('SELECT content, seo FROM sites WHERE slug = $1', ['main']);
-    if (result.rows.length === 0) return res.redirect('/admin');
-    const data = result.rows[0].content;
-    const seo = result.rows[0].seo || {};
     const userAgent = req.headers['user-agent'] || '';
     const isBotRequest = isBot(userAgent, req);
 

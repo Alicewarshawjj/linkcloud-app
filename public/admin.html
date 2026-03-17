@@ -289,6 +289,10 @@
         .source-link{font-size:12px;color:#667eea;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
         .source-link:hover{text-decoration:underline}
         .source-actions{display:flex;gap:8px}
+        .force-browser-toggle{display:flex;align-items:center;gap:6px;padding:8px 12px;background:rgba(102,126,234,.08);border-radius:8px;cursor:pointer;font-size:11px;color:#666;white-space:nowrap}
+        .force-browser-toggle:hover{background:rgba(102,126,234,.15)}
+        .force-browser-toggle input{width:16px;height:16px;cursor:pointer}
+        .force-browser-toggle input:checked + .force-label{color:#667eea;font-weight:600}
         .source-btn{padding:10px 16px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;border:none;display:flex;align-items:center;gap:6px}
         .source-btn.copy{background:rgba(102,126,234,.15);color:#667eea}
         .source-btn.copy:hover{background:rgba(102,126,234,.25)}
@@ -1655,8 +1659,8 @@ function showToast(msg) {
 }
 
 // === TRAFFIC SOURCES ===
-function loadSources() {
-    // Load from localStorage for now
+async function loadSources() {
+    // Load from localStorage
     const saved = localStorage.getItem('trafficSources');
     trafficSources = saved ? JSON.parse(saved) : [];
 
@@ -1669,6 +1673,22 @@ function loadSources() {
             { id: 4, name: 'tiktok-bio', icon: 'tiktok' }
         ];
         saveSources();
+    }
+
+    // Load forceBrowser settings from DB and sync
+    try {
+        const res = await fetch('/api/content', { credentials: 'same-origin' });
+        if (res.ok) {
+            const content = await res.json();
+            const forceBrowserSources = content.forceBrowserSources || [];
+            // Sync forceBrowser flag to local sources
+            trafficSources.forEach(source => {
+                source.forceBrowser = forceBrowserSources.includes(source.name);
+            });
+            saveSources();
+        }
+    } catch (e) {
+        console.log('Could not load force browser settings from DB');
     }
 
     renderSources();
@@ -1688,6 +1708,7 @@ function renderSources() {
 
     container.innerHTML = trafficSources.map(source => {
         const link = `${SITE_URL}/${source.name}`;
+        const isForced = source.forceBrowser || false;
         return `
             <div class="source-item" data-id="${source.id}">
                 <div class="source-icon ${source.icon}">${getSourceEmoji(source.icon)}</div>
@@ -1697,6 +1718,10 @@ function renderSources() {
                            placeholder="Source name...">
                     <div class="source-link" onclick="copySourceLink('${link}')">${link}</div>
                 </div>
+                <label class="force-browser-toggle" title="Enable for Reddit, Threads, etc.">
+                    <input type="checkbox" ${isForced ? 'checked' : ''} onchange="toggleForceBrowser(${source.id}, this.checked)">
+                    <span class="force-label">Force browser</span>
+                </label>
                 <div class="source-actions">
                     <button class="source-btn copy" onclick="copySourceLink('${link}')">📋 Copy</button>
                     <button class="source-btn delete" onclick="deleteSource(${source.id})">🗑️</button>
@@ -1767,6 +1792,41 @@ function deleteSource(id) {
         trafficSources = trafficSources.filter(s => s.id !== id);
         saveSources();
         renderSources();
+    }
+}
+
+function toggleForceBrowser(id, checked) {
+    const source = trafficSources.find(s => s.id === id);
+    if (source) {
+        source.forceBrowser = checked;
+        saveSources();
+        saveForceBrowserToDB();
+    }
+}
+
+async function saveForceBrowserToDB() {
+    // Get list of sources with forceBrowser enabled
+    const forceBrowserSources = trafficSources
+        .filter(s => s.forceBrowser)
+        .map(s => s.name);
+
+    // Save to DB via content update
+    try {
+        const res = await fetch('/api/content', { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const currentContent = await res.json();
+
+        // Add forceBrowserSources to content
+        currentContent.forceBrowserSources = forceBrowserSources;
+
+        await fetch('/api/content', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(currentContent)
+        });
+    } catch (e) {
+        console.error('Failed to save force browser settings:', e);
     }
 }
 
