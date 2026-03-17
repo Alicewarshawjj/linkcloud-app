@@ -1127,8 +1127,8 @@ function renderFeats() {
                 <button class="del-btn" onclick="delFeat(${i})">✕</button>
             </div>
             <div class="upload-zone feat-img-upload" id="featZone${i}">
-                <img id="featImg${i}" src="${f.image || ''}" style="display:${f.image ? 'block' : 'none'}">
-                <div class="placeholder" id="featPlaceholder${i}" style="display:${f.image ? 'none' : 'block'}"><span>📷</span>Image</div>
+                <img id="featImg${i}" src="${f.imgUrl || ''}" style="display:${f.imgUrl ? 'block' : 'none'}">
+                <div class="placeholder" id="featPlaceholder${i}" style="display:${f.imgUrl ? 'none' : 'block'}"><span>📷</span>Image</div>
                 <input type="file" accept="image/*" onchange="uploadFeatImage(this,${i})">
             </div>
             <div class="row2">
@@ -1148,7 +1148,7 @@ function renderFeats() {
 }
 
 function addFeat() {
-    feats.push({title: '', subtitle: '', url: '', image: ''});
+    feats.push({title: '', subtitle: '', url: '', imgUrl: ''});
     renderFeats();
     markDirty();
 }
@@ -1173,8 +1173,8 @@ function renderCars() {
                 <button class="del-btn" onclick="delCar(${i})">✕</button>
             </div>
             <div class="upload-zone feat-img-upload" id="carZone${i}">
-                <img id="carImg${i}" src="${c.image || ''}" style="display:${c.image ? 'block' : 'none'}">
-                <div class="placeholder" id="carPlaceholder${i}" style="display:${c.image ? 'none' : 'block'}"><span>📷</span>Image</div>
+                <img id="carImg${i}" src="${c.imgUrl || ''}" style="display:${c.imgUrl ? 'block' : 'none'}">
+                <div class="placeholder" id="carPlaceholder${i}" style="display:${c.imgUrl ? 'none' : 'block'}"><span>📷</span>Image</div>
                 <input type="file" accept="image/*" onchange="uploadCarImage(this,${i})">
             </div>
             <label>Title</label>
@@ -1186,7 +1186,7 @@ function renderCars() {
 }
 
 function addCar() {
-    cars.push({title: '', url: '', image: ''});
+    cars.push({title: '', url: '', imgUrl: ''});
     renderCars();
     markDirty();
 }
