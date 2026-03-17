@@ -1819,12 +1819,15 @@ async function saveForceBrowserToDB() {
         // Add forceBrowserSources to content
         currentContent.forceBrowserSources = forceBrowserSources;
 
-        await fetch('/api/content', {
-            method: 'POST',
+        const saveRes = await fetch('/api/content', {
+            method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
             body: JSON.stringify(currentContent)
         });
+        if (saveRes.ok) {
+            console.log('Force browser settings saved:', forceBrowserSources);
+        }
     } catch (e) {
         console.error('Failed to save force browser settings:', e);
     }
