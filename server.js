@@ -1457,6 +1457,52 @@ app.get('/:source', async (req, res, next) => {
       return res.redirect('/');
     }
 
+    // Check if source needs force browser open (ends with -force)
+    // AND user hasn't already been redirected (no ?browser=1)
+    if (cleanSource.endsWith('-force') && req.query.browser !== '1') {
+      // Return auto-open page (same as /reddit and /threads)
+      return res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opening...</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#000;color:#fff}
+.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+p{margin-top:20px;opacity:0.7}
+a{color:#fff;margin-top:20px}
+</style>
+</head><body>
+<div class="spinner"></div>
+<p>Opening in browser...</p>
+<a href="/?browser=1">Tap here if nothing happens</a>
+<script>
+(function(){
+  var url='https://'+location.hostname+'/?browser=1';
+  var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var isAndroid=/Android/i.test(navigator.userAgent);
+  if(isIOS){
+    var methods=[
+      function(){window.location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},
+      function(){var s=url.replace(/^https?:\\/\\//,'');window.location.href='x-safari-https://'+s},
+      function(){var w=window.open('about:blank','_blank');if(w){setTimeout(function(){w.location.href=url},100)}},
+      function(){var a=document.createElement('a');a.href=url;a.target='_system';a.click()},
+      function(){window.open(url,'_system')}
+    ];
+    var i=0;
+    function tryNext(){if(i<methods.length){try{methods[i]()}catch(e){}i++;setTimeout(tryNext,400)}}
+    tryNext();
+  }else if(isAndroid){
+    location.href='intent://'+location.hostname+'/?browser=1#Intent;scheme=https;package=com.android.chrome;end';
+  }else{
+    location.href=url;
+  }
+})();
+</script>
+</body></html>`);
+    }
+
     const result = await pool.query('SELECT content, seo FROM sites WHERE slug = $1', ['main']);
     if (result.rows.length === 0) return res.redirect('/admin');
     const data = result.rows[0].content;
