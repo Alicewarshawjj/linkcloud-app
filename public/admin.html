@@ -1202,33 +1202,51 @@ function delCar(i) {
     markDirty();
 }
 
-// === IMAGE UPLOAD ===
+// === IMAGE UPLOAD (Base64 - no server required) ===
+function resizeAndConvert(file, maxW, maxH) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let w = img.width, h = img.height;
+                if (w > maxW || h > maxH) {
+                    const ratio = Math.min(maxW / w, maxH / h);
+                    w = Math.round(w * ratio);
+                    h = Math.round(h * ratio);
+                }
+                canvas.width = w;
+                canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/jpeg', 0.92));
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
 async function uploadImage(input, type) {
     const file = input.files[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('image', file);
+    const maxW = type === 'cover' ? 800 : 200;
+    const maxH = type === 'cover' ? 300 : 200;
 
     try {
-        const res = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData,
-            credentials: 'same-origin'
-        });
-        const data = await res.json();
-
-        if (data.url) {
-            const img = document.getElementById(type + 'Img');
-            img.src = data.url;
-            img.style.display = 'block';
-            document.getElementById(type + 'Placeholder').style.display = 'none';
-            document.getElementById(type + 'Zone').classList.add('has-image');
-            document.getElementById(type + 'Position').style.display = 'block';
-            markDirty();
-        }
+        const dataUrl = await resizeAndConvert(file, maxW, maxH);
+        const img = document.getElementById(type + 'Img');
+        img.src = dataUrl;
+        img.style.display = 'block';
+        document.getElementById(type + 'Placeholder').style.display = 'none';
+        document.getElementById(type + 'Zone').classList.add('has-image');
+        document.getElementById(type + 'Position').style.display = 'block';
+        markDirty();
+        showToast('Image ready!');
     } catch(e) {
         console.error('Upload error:', e);
+        showToast('Upload failed!');
     }
 }
 
@@ -1236,26 +1254,17 @@ async function uploadFeatImage(input, index) {
     const file = input.files[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('image', file);
-
     try {
-        const res = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData,
-            credentials: 'same-origin'
-        });
-        const data = await res.json();
-
-        if (data.url) {
-            feats[index].image = data.url;
-            document.getElementById('featImg' + index).src = data.url;
-            document.getElementById('featImg' + index).style.display = 'block';
-            document.getElementById('featPlaceholder' + index).style.display = 'none';
-            markDirty();
-        }
+        const dataUrl = await resizeAndConvert(file, 600, 300);
+        feats[index].image = dataUrl;
+        document.getElementById('featImg' + index).src = dataUrl;
+        document.getElementById('featImg' + index).style.display = 'block';
+        document.getElementById('featPlaceholder' + index).style.display = 'none';
+        markDirty();
+        showToast('Image ready!');
     } catch(e) {
         console.error('Upload error:', e);
+        showToast('Upload failed!');
     }
 }
 
@@ -1263,26 +1272,17 @@ async function uploadCarImage(input, index) {
     const file = input.files[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('image', file);
-
     try {
-        const res = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData,
-            credentials: 'same-origin'
-        });
-        const data = await res.json();
-
-        if (data.url) {
-            cars[index].image = data.url;
-            document.getElementById('carImg' + index).src = data.url;
-            document.getElementById('carImg' + index).style.display = 'block';
-            document.getElementById('carPlaceholder' + index).style.display = 'none';
-            markDirty();
-        }
+        const dataUrl = await resizeAndConvert(file, 600, 300);
+        cars[index].image = dataUrl;
+        document.getElementById('carImg' + index).src = dataUrl;
+        document.getElementById('carImg' + index).style.display = 'block';
+        document.getElementById('carPlaceholder' + index).style.display = 'none';
+        markDirty();
+        showToast('Image ready!');
     } catch(e) {
         console.error('Upload error:', e);
+        showToast('Upload failed!');
     }
 }
 
@@ -1331,7 +1331,7 @@ async function saveContent() {
 
     try {
         const res = await fetch('/api/content', {
-            method: 'POST',
+            method: 'PUT',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(content),
             credentials: 'same-origin'
