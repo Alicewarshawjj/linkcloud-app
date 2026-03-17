@@ -1347,6 +1347,86 @@ app.get('/', async (req, res) => {
   }
 });
 
+// ═══ SPECIAL ROUTES: Threads & Reddit (auto-open in external browser) ═══
+// These platforms don't send identifiable UA/referrer, so we use dedicated routes
+app.get('/threads', (req, res) => {
+  // If already opened in browser, redirect to main page
+  if (req.query.browser === '1') {
+    return res.redirect('/');
+  }
+  // Auto-open page - tries to open Chrome/Safari immediately
+  res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opening...</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#000;color:#fff}
+.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+p{margin-top:20px;opacity:0.7}
+a{color:#fff;margin-top:20px}
+</style>
+</head><body>
+<div class="spinner"></div>
+<p>Opening in browser...</p>
+<a href="/?browser=1">Tap here if nothing happens</a>
+<script>
+(function(){
+  var url='https://'+location.hostname+'/?browser=1';
+  var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var isAndroid=/Android/i.test(navigator.userAgent);
+  if(isIOS){
+    setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},100);
+    setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},200);
+  }else if(isAndroid){
+    location.href='intent://'+location.hostname+'/?browser=1#Intent;scheme=https;package=com.android.chrome;end';
+  }else{
+    location.href=url;
+  }
+})();
+</script>
+</body></html>`);
+});
+
+app.get('/reddit', (req, res) => {
+  if (req.query.browser === '1') {
+    return res.redirect('/');
+  }
+  res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opening...</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#000;color:#fff}
+.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+p{margin-top:20px;opacity:0.7}
+a{color:#fff;margin-top:20px}
+</style>
+</head><body>
+<div class="spinner"></div>
+<p>Opening in browser...</p>
+<a href="/?browser=1">Tap here if nothing happens</a>
+<script>
+(function(){
+  var url='https://'+location.hostname+'/?browser=1';
+  var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var isAndroid=/Android/i.test(navigator.userAgent);
+  if(isIOS){
+    setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},100);
+    setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},200);
+  }else if(isAndroid){
+    location.href='intent://'+location.hostname+'/?browser=1#Intent;scheme=https;package=com.android.chrome;end';
+  }else{
+    location.href=url;
+  }
+})();
+</script>
+</body></html>`);
+});
+
 // ═══ TRAFFIC SOURCE ROUTE (Clean URLs: /ig-main, /twitter1, etc.) ═══
 app.get('/:source', async (req, res, next) => {
   // Skip if it's a known route
