@@ -1427,6 +1427,58 @@ a{color:#fff;margin-top:20px}
 </body></html>`);
 });
 
+// ═══ FACEBOOK DEDICATED ROUTE ═══
+// Facebook's in-app browser is stubborn - needs dedicated route with different methods
+app.get('/facebook', (req, res) => {
+  if (req.query.browser === '1') {
+    return res.redirect('/');
+  }
+  // Facebook-specific: Use only direct Safari scheme (no about:blank which FB blocks)
+  res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opening...</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#000;color:#fff}
+.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+p{margin-top:20px;opacity:0.7}
+a{color:#fff;margin-top:20px;padding:15px 30px;background:#1877f2;border-radius:8px;text-decoration:none}
+</style>
+</head><body>
+<div class="spinner"></div>
+<p>Opening in Safari...</p>
+<a href="/?browser=1" id="manual">Tap here if nothing happens</a>
+<script>
+(function(){
+  var url='https://'+location.hostname+'/?browser=1';
+  var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var isAndroid=/Android/i.test(navigator.userAgent);
+  if(isIOS){
+    // Facebook iOS: Try Safari scheme directly, then Chrome
+    var s=url.replace(/^https?:\\/\\//,'');
+    setTimeout(function(){location.href='x-safari-https://'+s},100);
+    setTimeout(function(){location.href='googlechrome://'+s},600);
+    // Fallback: create hidden link and click it
+    setTimeout(function(){
+      var a=document.createElement('a');
+      a.href=url;
+      a.target='_blank';
+      a.rel='noopener';
+      document.body.appendChild(a);
+      a.click();
+    },1100);
+  }else if(isAndroid){
+    location.href='intent://'+location.hostname+'/?browser=1#Intent;scheme=https;package=com.android.chrome;end';
+  }else{
+    location.href=url;
+  }
+})();
+</script>
+</body></html>`);
+});
+
 // ═══ TRAFFIC SOURCE ROUTE (Clean URLs: /ig-main, /twitter1, etc.) ═══
 app.get('/:source', async (req, res, next) => {
   // Skip if it's a known route
