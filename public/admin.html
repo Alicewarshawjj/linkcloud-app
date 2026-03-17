@@ -1519,7 +1519,7 @@ function renderSources() {
     }
 
     container.innerHTML = trafficSources.map(source => {
-        const link = `${SITE_URL}?src=${encodeURIComponent(source.name)}`;
+        const link = `${SITE_URL}/${source.name}`;
         return `
             <div class="source-item" data-id="${source.id}">
                 <div class="source-icon ${source.icon}">${getSourceEmoji(source.icon)}</div>

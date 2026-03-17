@@ -1225,16 +1225,49 @@ app.get('/', async (req, res) => {
     const seo = result.rows[0].seo || {};
     const userAgent = req.headers['user-agent'] || '';
 
-    // Get traffic source from URL param (e.g., ?src=ig1)
-    const source = (req.query.src || '').slice(0, 50).replace(/[^a-zA-Z0-9_-]/g, '') || null;
-
     // Bot detection
     const isBotRequest = isBot(userAgent, req);
 
-    res.send(renderProfilePage(data, seo, isBotRequest, source));
+    res.send(renderProfilePage(data, seo, isBotRequest, null));
   } catch (e) {
     console.error('Render error:', e);
     res.status(500).send('Server error');
+  }
+});
+
+// ═══ TRAFFIC SOURCE ROUTE (Clean URLs: /ig-main, /twitter1, etc.) ═══
+app.get('/:source', async (req, res, next) => {
+  // Skip if it's a known route
+  const knownRoutes = ['admin', 'go', 'api', 'favicon.ico', 'robots.txt'];
+  const source = req.params.source;
+
+  // Check if it looks like a file or known route
+  if (knownRoutes.includes(source) || source.includes('.')) {
+    return next();
+  }
+
+  // Validate source format (alphanumeric, dash, underscore only)
+  const cleanSource = source.slice(0, 50).replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!cleanSource || cleanSource !== source) {
+    return next(); // Invalid source, pass to 404
+  }
+
+  try {
+    if (!dbReady) {
+      return res.redirect('/');
+    }
+
+    const result = await pool.query('SELECT content, seo FROM sites WHERE slug = $1', ['main']);
+    if (result.rows.length === 0) return res.redirect('/admin');
+    const data = result.rows[0].content;
+    const seo = result.rows[0].seo || {};
+    const userAgent = req.headers['user-agent'] || '';
+    const isBotRequest = isBot(userAgent, req);
+
+    res.send(renderProfilePage(data, seo, isBotRequest, cleanSource));
+  } catch (e) {
+    console.error('Source route error:', e);
+    res.redirect('/');
   }
 });
 
