@@ -402,84 +402,26 @@ async function getCountryFromIP(ip, req = null) {
   return { country: 'Unknown', countryCode: 'XX', city: '' };
 }
 
-// ═══ LINK ENCODING (AES-256-GCM Encryption) ═══
-// Military-grade encryption - crawlers CANNOT decode even with source code access
-
-const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
-const IV_LENGTH = 12;
-const AUTH_TAG_LENGTH = 16;
-
-// Derive a proper 32-byte key from the environment variable
-function getEncryptionKey() {
-  const keyBase = process.env.LINK_KEY || 'lc-2024-secret-key-change-me!!';
-  // Use SHA-256 to get exactly 32 bytes
-  return crypto.createHash('sha256').update(keyBase).digest();
-}
+// ═══ LINK ENCODING (Base64) ═══
+// Simple URL-safe encoding - security handled by Cloudflare bot protection and rate limiting
 
 function encodeLink(url) {
-  try {
-    const key = getEncryptionKey();
-    const iv = crypto.randomBytes(IV_LENGTH);
-    const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
-
-    const encrypted = Buffer.concat([cipher.update(url, 'utf8'), cipher.final()]);
-    const authTag = cipher.getAuthTag();
-
-    // Combine: IV (12 bytes) + AuthTag (16 bytes) + Encrypted data
-    const combined = Buffer.concat([iv, authTag, encrypted]);
-
-    // URL-safe base64
-    return combined.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  } catch (e) {
-    console.error('Encryption error:', e.message);
-    // Fallback: don't expose raw URL
-    return Buffer.from(url).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  }
+  return Buffer.from(url, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
 function decodeLink(encoded) {
   try {
-    console.log('🔓 DECODE: Starting decode, length:', encoded?.length);
-    // Restore base64 padding
+    // Simple URL-safe base64 decoding
     let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
     while (base64.length % 4) base64 += '=';
-
-    const combined = Buffer.from(base64, 'base64');
-
-    // Handle legacy base64-only encoding (for backwards compatibility)
-    if (combined.length < IV_LENGTH + AUTH_TAG_LENGTH + 1) {
-      // Probably old base64 encoding - try to decode directly
-      const decoded = Buffer.from(base64, 'base64').toString('utf8');
-      if (decoded.startsWith('http')) return decoded;
-      return null;
+    const decoded = Buffer.from(base64, 'base64').toString('utf8');
+    if (decoded.startsWith('http')) {
+      return decoded;
     }
-
-    const key = getEncryptionKey();
-    const iv = combined.subarray(0, IV_LENGTH);
-    const authTag = combined.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
-    const encrypted = combined.subarray(IV_LENGTH + AUTH_TAG_LENGTH);
-
-    const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
-    decipher.setAuthTag(authTag);
-
-    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
-    console.log('🔓 DECODE: AES decryption success');
-    return decrypted.toString('utf8');
+    console.log('🔓 DECODE: Not a valid URL');
+    return null;
   } catch (e) {
-    console.log('🔓 DECODE: AES failed, trying legacy base64:', e.message);
-    // Try legacy base64 decode as fallback
-    try {
-      let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
-      while (base64.length % 4) base64 += '=';
-      const decoded = Buffer.from(base64, 'base64').toString('utf8');
-      if (decoded.startsWith('http')) {
-        console.log('🔓 DECODE: Legacy base64 success');
-        return decoded;
-      }
-      console.log('🔓 DECODE: Legacy base64 not a URL:', decoded.slice(0, 30));
-    } catch (e2) {
-      console.log('🔓 DECODE: Legacy base64 also failed:', e2.message);
-    }
+    console.log('🔓 DECODE ERROR:', e.message);
     return null;
   }
 }
@@ -511,7 +453,8 @@ app.use(helmet({
   },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   xContentTypeOptions: true,
-  xFrameOptions: { action: 'deny' },
+  // Allow iframe from same origin (for admin preview)
+  xFrameOptions: { action: 'sameorigin' },
   xXssProtection: true
 }));
 app.use(express.json({ limit: '10mb' }));
