@@ -9,8 +9,12 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const crypto = require('crypto');
+const geoip = require('geoip-country');  // Offline geolocation - no API calls needed
 
 const app = express();
+
+// CRITICAL: Trust proxy for Railway - enables correct IP detection
+app.set('trust proxy', true);
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 
@@ -329,97 +333,57 @@ const COUNTRY_NAMES = {
   'CZ': 'Czech Republic', 'HU': 'Hungary', 'RO': 'Romania', 'UA': 'Ukraine'
 };
 
-// Get geolocation from Cloudflare/CDN headers (BEST - instant, free, accurate)
-function getGeoFromRequest(req) {
-  // Debug: Log all relevant headers
-  console.log('🌍 GEO DEBUG - CF-IPCountry:', req.headers['cf-ipcountry']);
-  console.log('🌍 GEO DEBUG - All CF headers:', {
-    'cf-ipcountry': req.headers['cf-ipcountry'],
-    'cf-ipcity': req.headers['cf-ipcity'],
-    'cf-ray': req.headers['cf-ray'],
-    'cf-connecting-ip': req.headers['cf-connecting-ip']
-  });
+// ═══ GEOLOCATION (Offline Database - No API calls, instant, reliable) ═══
+// Uses MaxMind GeoLite2 database via geoip-country package
+// Database auto-updates 2x weekly, 99% accuracy for country detection
 
-  // Cloudflare headers
-  const cfCountry = req.headers['cf-ipcountry'];
-  if (cfCountry && cfCountry !== 'XX' && cfCountry !== 'T1') {
-    console.log('✅ GEO: Using Cloudflare header:', cfCountry);
-    return {
-      country: COUNTRY_NAMES[cfCountry] || cfCountry,
-      countryCode: cfCountry,
-      city: req.headers['cf-ipcity'] || ''
-    };
-  }
+function getCountryFromIP(ip, req = null) {
+  // Extract real IP from request if available
+  let clientIP = ip;
 
-  // Vercel geolocation headers
-  const vercelCountry = req.headers['x-vercel-ip-country'];
-  if (vercelCountry) {
-    return {
-      country: COUNTRY_NAMES[vercelCountry] || vercelCountry,
-      countryCode: vercelCountry,
-      city: req.headers['x-vercel-ip-city'] || ''
-    };
-  }
-
-  return null;
-}
-
-// Fallback: IP Geolocation using external APIs
-async function getCountryFromIP(ip, req = null) {
-  // First try CDN headers (Cloudflare, Vercel)
   if (req) {
-    const cdnGeo = getGeoFromRequest(req);
-    if (cdnGeo) return cdnGeo;
+    // Priority: X-Forwarded-For > X-Real-IP > req.ip > provided ip
+    clientIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+               req.headers['x-real-ip'] ||
+               req.ip ||
+               ip;
   }
 
-  // Skip local/private IPs
-  if (!ip || ip === '::1' || ip === '127.0.0.1' ||
-      ip.startsWith('192.168.') || ip.startsWith('10.') ||
-      ip.startsWith('172.16.') || ip.startsWith('172.17.') ||
-      ip.startsWith('100.') || ip.includes('railway')) {
-    return { country: 'Local', countryCode: 'XX', city: 'Local' };
+  // Skip if no IP
+  if (!clientIP) {
+    return { country: 'Unknown', countryCode: 'XX', city: '' };
   }
 
   // Clean IP - handle IPv6 format like ::ffff:1.2.3.4
-  let cleanIP = ip;
-  if (ip.includes('::ffff:')) {
-    cleanIP = ip.split('::ffff:')[1];
-  } else if (ip.includes(':') && ip.includes('.')) {
-    // Mixed format
-    cleanIP = ip.split(':').pop();
+  let cleanIP = clientIP;
+  if (clientIP.includes('::ffff:')) {
+    cleanIP = clientIP.split('::ffff:')[1];
+  } else if (clientIP.includes(':') && clientIP.includes('.')) {
+    cleanIP = clientIP.split(':').pop();
   }
-  cleanIP = cleanIP.trim();
+  cleanIP = cleanIP?.trim();
 
-  console.log('🌐 IP Lookup:', { original: ip, clean: cleanIP });
+  // Skip local/private IPs
+  if (!cleanIP || cleanIP === '::1' || cleanIP === '127.0.0.1' ||
+      cleanIP.startsWith('192.168.') || cleanIP.startsWith('10.') ||
+      cleanIP.startsWith('172.16.') || cleanIP.startsWith('172.17.') ||
+      cleanIP.startsWith('100.')) {
+    return { country: 'Local', countryCode: 'XX', city: '' };
+  }
 
-  // Try ipinfo.io (HTTPS, 50K req/month free)
+  // Use offline GeoIP database (instant, no API calls)
   try {
-    const response = await fetch(`https://ipinfo.io/${cleanIP}/json`, {
-      headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(2000)
-    });
-    if (response.ok) {
-      const data = await response.json();
-      if (data.country) {
-        return {
-          country: COUNTRY_NAMES[data.country] || data.country,
-          countryCode: data.country,
-          city: data.city || ''
-        };
-      }
+    const geo = geoip.lookup(cleanIP);
+    if (geo && geo.country) {
+      return {
+        country: COUNTRY_NAMES[geo.country] || geo.country,
+        countryCode: geo.country,
+        city: ''  // GeoIP-country doesn't include city
+      };
     }
-  } catch (e) { /* try next */ }
-
-  // Fallback to ip-api.com
-  try {
-    const response = await fetch(`http://ip-api.com/json/${cleanIP}?fields=status,country,countryCode,city`, {
-      signal: AbortSignal.timeout(2000)
-    });
-    const data = await response.json();
-    if (data.status === 'success') {
-      return { country: data.country, countryCode: data.countryCode, city: data.city || '' };
-    }
-  } catch (e) { /* fail silently */ }
+  } catch (e) {
+    // Silently fail
+  }
 
   return { country: 'Unknown', countryCode: 'XX', city: '' };
 }
@@ -797,15 +761,8 @@ app.post('/api/analytics/click', analyticsLimiter, async (req, res) => {
     // Parse device info
     const deviceInfo = parseUserAgent(user_agent);
 
-    // Get country - don't block on failure
-    let geoInfo = { country: 'Unknown', countryCode: 'XX', city: '' };
-    try {
-      geoInfo = await getCountryFromIP(ip_address, req);
-      console.log('📊 GEO RESULT:', geoInfo);
-    } catch (geoErr) {
-      console.log('📊 GEO ERROR:', geoErr.message);
-      // Silently continue with unknown location
-    }
+    // Get country using offline GeoIP database (instant, no API calls)
+    const geoInfo = getCountryFromIP(ip_address, req);
 
     // SECURITY: Do NOT store link_url - it could leak protected URLs
     // We only store the link_id which is opaque
@@ -1051,12 +1008,9 @@ app.get('/go/:encodedLink', async (req, res) => {
     const safeType = ['social', 'featured', 'carousel'].includes(linkType) ? linkType : 'redirect';
     const safeTitle = (linkTitle || 'Link').slice(0, 200).replace(/[<>"'&]/g, '');
 
-    // Parse device/location for analytics
+    // Parse device/location for analytics (instant - uses offline GeoIP database)
     const deviceInfo = parseUserAgent(user_agent);
-    let geoInfo = { country: 'Unknown', countryCode: 'XX', city: '' };
-    try {
-      geoInfo = await getCountryFromIP(ip_address, req);
-    } catch { /* ignore */ }
+    const geoInfo = getCountryFromIP(ip_address, req);
 
     // SECURITY: Only store opaque ID (hash of encrypted link), NOT the actual URL
     const linkId = crypto.createHash('sha256').update(encodedLink).digest('hex').slice(0, 16);
