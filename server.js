@@ -1368,8 +1368,9 @@ app.get('/', async (req, res) => {
 });
 
 // ═══ FACEBOOK ESCAPE: Dedicated route for Facebook in-app browser ═══
-// STRATEGY: Use YouTube Universal Link to escape Facebook WebView
-// YouTube links trigger iOS "Open in YouTube?" dialog from within WebView
+// STRATEGY: Based on inappdebugger.com findings
+// iOS: x-safari-https:// scheme (iOS 17+) with user tap required
+// Android: intent:// scheme works reliably
 app.get('/fb', (req, res) => {
   const ua = req.headers['user-agent'] || '';
   const isFacebook = ua.includes('FBAN') || ua.includes('FBAV');
@@ -1382,87 +1383,111 @@ app.get('/fb', (req, res) => {
   }
 
   const targetUrl = `https://${req.hostname}/?browser=1`;
-
-  // YouTube redirect URL - this is a Universal Link that triggers the iOS dialog
-  const youtubeRedirect = `https://www.youtube.com/redirect?event=channel_description&redir_token=QUFFLUhqa0FNcmpfLXlfMzRuZl9sUGNrM3pOWWxzMFJrd3xBQ3Jtc0ttN0xTdmJxZVFfVW1ESk5pT2J4TGlKdE1QNGxsbHBIZnJOc1BsR1J6cXdYLWFGNjA0cVVoNGFkT0tTbmVKUmdjNXBZM0JGZFBmZ1NVTVJvNjFSOFBPdWg&q=${encodeURIComponent(targetUrl)}`;
+  // iOS Safari scheme - works on iOS 17+
+  const safariUrl = targetUrl.replace('https://', 'x-safari-https://');
+  // Android intent
+  const androidIntent = `intent://${req.hostname}/?browser=1#Intent;scheme=https;end`;
 
   res.send(`<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>Continue</title>
+<title>Open Link</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#000;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}
-.c{text-align:center;padding:20px;max-width:340px}
-h1{font-size:24px;font-weight:600;margin-bottom:12px}
-p{color:#888;font-size:15px;margin-bottom:28px;line-height:1.5}
-.btn{display:block;width:100%;padding:18px;background:#ff0000;color:#fff;text-decoration:none;border-radius:14px;font-size:17px;font-weight:600;margin-bottom:12px;-webkit-tap-highlight-color:transparent}
-.btn:active{opacity:0.9;transform:scale(0.98)}
-.btn2{background:#262626}
-.small{color:#555;font-size:13px;margin-top:20px}
-.small a{color:#0095f6}
+.c{text-align:center;padding:24px;max-width:340px}
+h1{font-size:22px;font-weight:600;margin-bottom:8px}
+.sub{color:#666;font-size:14px;margin-bottom:24px}
+.btn{display:block;width:100%;padding:16px;background:#007AFF;color:#fff;text-decoration:none;border-radius:12px;font-size:16px;font-weight:600;margin-bottom:10px;-webkit-tap-highlight-color:transparent;border:none;cursor:pointer}
+.btn:active{opacity:0.8;transform:scale(0.98)}
+.btn.green{background:#34C759}
+.btn.gray{background:#1c1c1e}
+.divider{color:#444;font-size:12px;margin:20px 0;text-transform:uppercase;letter-spacing:1px}
+.manual{background:#1c1c1e;border-radius:16px;padding:20px;text-align:left;margin-top:16px}
+.manual-title{font-size:13px;color:#666;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.5px}
+.step{display:flex;align-items:flex-start;margin-bottom:14px}
+.step:last-child{margin-bottom:0}
+.step-num{min-width:28px;height:28px;background:#333;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;margin-right:14px;flex-shrink:0}
+.step-text{font-size:14px;color:#aaa;line-height:1.5;padding-top:4px}
+.step-text b{color:#fff}
+.copy-row{margin-top:20px;padding-top:16px;border-top:1px solid #333;text-align:center}
+.copy-link{color:#007AFF;font-size:14px;text-decoration:none;background:none;border:none;cursor:pointer}
 </style>
 </head><body>
 <div class="c">
-  <h1>Almost there! 👋</h1>
-  <p>Tap the button below to continue. You'll be redirected through YouTube.</p>
-  <a class="btn" href="${youtubeRedirect}" id="ytBtn">Continue via YouTube →</a>
-  <a class="btn btn2" href="${targetUrl}" target="_blank" rel="noopener">Try Direct Link</a>
-  <p class="small">Link not working? <a href="#" id="copyBtn">Copy link</a></p>
+  <h1>Open in Safari</h1>
+  <p class="sub">Facebook's browser blocks external links</p>
+
+  <a class="btn green" href="${safariUrl}" id="safariBtn">Open in Safari →</a>
+  <button class="btn" id="tryOpen">Try Auto-Open</button>
+
+  <div class="divider">or manually</div>
+
+  <div class="manual">
+    <div class="manual-title">Open in Browser</div>
+    <div class="step">
+      <span class="step-num">1</span>
+      <span class="step-text">Tap <b>⋯</b> or <b>︙</b> at the bottom</span>
+    </div>
+    <div class="step">
+      <span class="step-num">2</span>
+      <span class="step-text">Select <b>"Open in Browser"</b> or <b>"Open in Safari"</b></span>
+    </div>
+    <div class="copy-row">
+      <button class="copy-link" id="copyBtn">📋 Copy link to clipboard</button>
+    </div>
+  </div>
 </div>
 <script>
 (function(){
   var target="${targetUrl}";
-  var ytUrl="${youtubeRedirect}";
+  var safariUrl="${safariUrl}";
+  var androidIntent="${androidIntent}";
   var ua=navigator.userAgent||'';
   var isAndroid=/Android/i.test(ua);
+  var isIOS=/iPhone|iPad|iPod/i.test(ua);
 
-  // For Android: intent scheme works reliably
+  // Android: intent scheme - auto redirect
   if(isAndroid){
-    var intent='intent://'+target.replace(/^https?:\\/\\//,'')+'#Intent;scheme=https;action=android.intent.action.VIEW;end';
-    document.getElementById('ytBtn').href=intent;
-    // Auto-trigger after short delay
+    document.getElementById('safariBtn').href=androidIntent;
+    document.getElementById('safariBtn').textContent='Open in Browser →';
     setTimeout(function(){
-      window.location.href=intent;
-    },400);
+      window.location.href=androidIntent;
+    },300);
     return;
   }
 
-  // For iOS: Auto-click the YouTube link after a moment
-  // This gives the page time to render and user can see what's happening
-  setTimeout(function(){
-    // Use location.replace for cleaner redirect
-    window.location.replace(ytUrl);
-  },600);
-
-  // Copy button handler
-  document.getElementById('copyBtn').onclick=function(e){
+  // iOS: Try Safari scheme on button click
+  document.getElementById('tryOpen').onclick=function(e){
     e.preventDefault();
-    if(navigator.clipboard){
-      navigator.clipboard.writeText(target).then(function(){
-        alert('Link copied! Open Safari and paste.');
-      });
-    }else{
-      prompt('Copy:',target);
-    }
+    // First try href approach
+    var a=document.createElement('a');
+    a.href=safariUrl;
+    a.click();
+    // Then try window.open as backup
+    setTimeout(function(){
+      try{window.open(safariUrl,'_blank');}catch(e){}
+    },100);
+    // Then try location
+    setTimeout(function(){
+      window.location.href=safariUrl;
+    },200);
   };
-})();
-  }
 
-  // Start trying methods after small delay
-  setTimeout(tryNext,300);
-
-  // Copy button handler
+  // Copy button
   document.getElementById('copyBtn').onclick=function(e){
     e.preventDefault();
-    if(navigator.clipboard){
+    if(navigator.clipboard&&navigator.clipboard.writeText){
       navigator.clipboard.writeText(target).then(function(){
-        alert('Link copied! Paste in Safari.');
+        e.target.textContent='✓ Copied! Paste in Safari';
+        setTimeout(function(){e.target.textContent='📋 Copy link to clipboard';},2000);
+      }).catch(function(){
+        prompt('Copy this link:',target);
       });
     }else{
-      prompt('Copy:',target);
+      prompt('Copy this link:',target);
     }
   };
 })();
