@@ -17,7 +17,8 @@
     "geoip-country": "^5.0.202603132347",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.13.0"
+    "pg": "^8.13.0",
+    "ua-parser-js": "^2.0.9"
   },
   "engines": {
     "node": ">=18.0.0"

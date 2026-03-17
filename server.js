@@ -9,7 +9,9 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const crypto = require('crypto');
-const geoip = require('geoip-country');  // Offline geolocation - no API calls needed
+const net = require('net');
+const geoip = require('geoip-country');
+const UAParser = require('ua-parser-js');
 
 const app = express();
 
@@ -286,125 +288,108 @@ function getRequestFingerprint(req) {
   return crypto.createHash('sha256').update(data).digest('hex').slice(0, 16);
 }
 
-// ═══ DEVICE & LOCATION DETECTION ═══
-function parseUserAgent(ua) {
-  if (!ua) return { os: 'Unknown', browser: 'Unknown', device: 'Unknown' };
+// ═══ DEVICE & LOCATION DETECTION (Using ua-parser-js + proper IP handling) ═══
 
-  let os = 'Unknown';
-  let browser = 'Unknown';
-  let device = 'Desktop';
+// Parse User Agent using ua-parser-js (supports modern browsers + Client Hints)
+function parseUserAgent(ua, headers = {}) {
+  if (!ua) return { os: 'Unknown', browser: 'Unknown', device: 'Desktop' };
 
-  // OS Detection
-  if (/iPhone|iPad|iPod/.test(ua)) { os = 'iOS'; device = /iPad/.test(ua) ? 'Tablet' : 'Mobile'; }
-  else if (/Android/.test(ua)) { os = 'Android'; device = /Mobile/.test(ua) ? 'Mobile' : 'Tablet'; }
-  else if (/Windows/.test(ua)) os = 'Windows';
-  else if (/Mac OS X/.test(ua)) os = 'macOS';
-  else if (/Linux/.test(ua)) os = 'Linux';
-  else if (/CrOS/.test(ua)) os = 'Chrome OS';
+  try {
+    const parser = new UAParser(ua, headers);
+    const result = parser.getResult();
 
-  // Browser Detection
-  if (/Instagram/.test(ua)) browser = 'Instagram';
-  else if (/FBAN|FBAV/.test(ua)) browser = 'Facebook';
-  else if (/Twitter/.test(ua)) browser = 'Twitter';
-  else if (/TikTok/.test(ua)) browser = 'TikTok';
-  else if (/Edg/.test(ua)) browser = 'Edge';
-  else if (/Chrome/.test(ua)) browser = 'Chrome';
-  else if (/Safari/.test(ua) && !/Chrome/.test(ua)) browser = 'Safari';
-  else if (/Firefox/.test(ua)) browser = 'Firefox';
-  else if (/Opera|OPR/.test(ua)) browser = 'Opera';
+    const deviceType = result.device.type;
+    let device = 'Desktop';
+    if (deviceType === 'mobile') device = 'Mobile';
+    else if (deviceType === 'tablet') device = 'Tablet';
 
-  return { os, browser, device };
+    return {
+      browser: result.browser.name || 'Unknown',
+      os: result.os.name || 'Unknown',
+      device
+    };
+  } catch (e) {
+    return { os: 'Unknown', browser: 'Unknown', device: 'Desktop' };
+  }
 }
 
-// Country code to full name mapping
-const COUNTRY_NAMES = {
-  'US': 'United States', 'GB': 'United Kingdom', 'IL': 'Israel',
-  'DE': 'Germany', 'FR': 'France', 'ES': 'Spain', 'IT': 'Italy',
-  'NL': 'Netherlands', 'BE': 'Belgium', 'CH': 'Switzerland',
-  'AT': 'Austria', 'AU': 'Australia', 'CA': 'Canada', 'BR': 'Brazil',
-  'MX': 'Mexico', 'JP': 'Japan', 'KR': 'South Korea', 'CN': 'China',
-  'IN': 'India', 'RU': 'Russia', 'PL': 'Poland', 'SE': 'Sweden',
-  'NO': 'Norway', 'DK': 'Denmark', 'FI': 'Finland', 'PT': 'Portugal',
-  'GR': 'Greece', 'TR': 'Turkey', 'AE': 'UAE', 'SA': 'Saudi Arabia',
-  'EG': 'Egypt', 'ZA': 'South Africa', 'NG': 'Nigeria', 'KE': 'Kenya',
-  'AR': 'Argentina', 'CL': 'Chile', 'CO': 'Colombia', 'PE': 'Peru',
-  'TH': 'Thailand', 'VN': 'Vietnam', 'PH': 'Philippines', 'ID': 'Indonesia',
-  'MY': 'Malaysia', 'SG': 'Singapore', 'NZ': 'New Zealand', 'IE': 'Ireland',
-  'CZ': 'Czech Republic', 'HU': 'Hungary', 'RO': 'Romania', 'UA': 'Ukraine'
-};
+// Get client IP - Railway recommends req.ip with trust proxy, fallback to x-forwarded-for
+function getClientIP(req) {
+  // 1) Best option with Express + trust proxy
+  let ip = req.ip || '';
 
-// ═══ GEOLOCATION (Offline Database - No API calls, instant, reliable) ═══
-// Uses MaxMind GeoLite2 database via geoip-country package
-// Database auto-updates 2x weekly, 99% accuracy for country detection
-
-function getCountryFromIP(ip, req = null) {
-  // Extract real IP from request if available
-  let clientIP = ip;
-
-  if (req) {
-    // Priority: X-Forwarded-For > X-Real-IP > req.ip > provided ip
+  // 2) Fallback to x-forwarded-for (first IP)
+  if (!ip) {
     const xff = req.headers['x-forwarded-for'];
-    const xri = req.headers['x-real-ip'];
-    const reqIp = req.ip;
-
-    clientIP = xff?.split(',')[0]?.trim() || xri || reqIp || ip;
-
-    // DEBUG: Log all IP sources
-    console.log('🌍 GEO DEBUG:', {
-      'x-forwarded-for': xff,
-      'x-real-ip': xri,
-      'req.ip': reqIp,
-      'provided': ip,
-      'selected': clientIP
-    });
+    if (xff) {
+      ip = xff.split(',')[0].trim();
+    }
   }
 
-  // Skip if no IP
-  if (!clientIP) {
-    console.log('🌍 GEO: No IP found');
-    return { country: 'Unknown', countryCode: 'XX', city: '' };
+  // 3) Clean IPv4-mapped IPv6 (::ffff:1.2.3.4 -> 1.2.3.4)
+  ip = String(ip).replace(/^::ffff:/, '').trim();
+
+  // 4) Remove port if present
+  ip = ip.replace(/:\d+$/, '');
+
+  return ip;
+}
+
+// Check if IP is public (not private/reserved)
+function isPublicIP(ip) {
+  if (!ip || net.isIP(ip) === 0) return false;
+
+  // IPv4 private/reserved
+  if (
+    ip === '127.0.0.1' ||
+    ip === '0.0.0.0' ||
+    ip.startsWith('10.') ||
+    ip.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip) ||
+    ip.startsWith('169.254.')
+  ) return false;
+
+  // IPv6 local
+  if (
+    ip === '::1' ||
+    ip.startsWith('fc') ||
+    ip.startsWith('fd') ||
+    ip.startsWith('fe80:')
+  ) return false;
+
+  return true;
+}
+
+// Get country from IP using GeoIP
+function getCountryFromIP(req) {
+  const ip = getClientIP(req);
+
+  // Debug logging
+  console.log('🌍 GEO:', {
+    'req.ip': req.ip,
+    'xff': req.headers['x-forwarded-for'],
+    'finalIP': ip,
+    'isPublic': isPublicIP(ip)
+  });
+
+  if (!isPublicIP(ip)) {
+    return { country: 'Unknown', countryCode: 'XX', ip };
   }
 
-  // Clean IP - handle IPv6 format like ::ffff:1.2.3.4
-  let cleanIP = clientIP;
-  if (clientIP.includes('::ffff:')) {
-    cleanIP = clientIP.split('::ffff:')[1];
-  } else if (clientIP.includes(':') && clientIP.includes('.')) {
-    cleanIP = clientIP.split(':').pop();
-  }
-  cleanIP = cleanIP?.trim();
-
-  console.log('🌍 GEO: Clean IP:', cleanIP);
-
-  // Skip local/private IPs
-  if (!cleanIP || cleanIP === '::1' || cleanIP === '127.0.0.1' ||
-      cleanIP.startsWith('192.168.') || cleanIP.startsWith('10.') ||
-      cleanIP.startsWith('172.16.') || cleanIP.startsWith('172.17.') ||
-      cleanIP.startsWith('100.')) {
-    console.log('🌍 GEO: Local/Private IP, skipping');
-    return { country: 'Local', countryCode: 'XX', city: '' };
-  }
-
-  // Use offline GeoIP database (instant, no API calls)
   try {
-    const geo = geoip.lookup(cleanIP);
-    console.log('🌍 GEO: Lookup result:', geo);
+    const geo = geoip.lookup(ip);
     if (geo && geo.country) {
-      // geoip-country returns: country (code), name (full name)
-      const result = {
-        country: geo.name || COUNTRY_NAMES[geo.country] || geo.country,
+      return {
+        country: geo.name || geo.country,
         countryCode: geo.country,
-        city: ''
+        ip
       };
-      console.log('🌍 GEO: Final result:', result);
-      return result;
     }
   } catch (e) {
-    console.log('🌍 GEO: Lookup error:', e.message);
+    console.log('🌍 GEO error:', e.message);
   }
 
-  console.log('🌍 GEO: Returning Unknown');
-  return { country: 'Unknown', countryCode: 'XX', city: '' };
+  return { country: 'Unknown', countryCode: 'XX', ip };
 }
 
 // ═══ LINK ENCRYPTION (AES-256-GCM) ═══
@@ -761,34 +746,19 @@ app.post('/api/analytics/click', analyticsLimiter, async (req, res) => {
     const safe_link_title = sanitize(link_title, 200);
 
     const user_agent = (req.headers['user-agent'] || '').slice(0, 500);
-    // Try CF-Connecting-IP first (Cloudflare real IP), then x-forwarded-for
-    const ip_address = (
-      req.headers['cf-connecting-ip'] ||
-      req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-      req.ip || ''
-    ).slice(0, 45);
     const referrer = (req.headers.referer || '').slice(0, 500);
 
-    // Debug logging
-    console.log('📊 CLICK DEBUG:', {
-      ip: ip_address,
-      cfIP: req.headers['cf-connecting-ip'],
-      xForwarded: req.headers['x-forwarded-for'],
-      cfCountry: req.headers['cf-ipcountry']
-    });
+    // Parse device info using ua-parser-js
+    const deviceInfo = parseUserAgent(user_agent, req.headers);
 
-    // Parse device info
-    const deviceInfo = parseUserAgent(user_agent);
-
-    // Get country using offline GeoIP database (instant, no API calls)
-    const geoInfo = getCountryFromIP(ip_address, req);
+    // Get country using proper IP detection for Railway
+    const geoInfo = getCountryFromIP(req);
 
     // SECURITY: Do NOT store link_url - it could leak protected URLs
-    // We only store the link_id which is opaque
     await pool.query(
-      `INSERT INTO analytics (slug, link_type, link_id, link_title, user_agent, ip_address, country, country_code, city, os, browser, device, referrer)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-      ['main', link_type, safe_link_id, safe_link_title, user_agent, ip_address, geoInfo.country, geoInfo.countryCode, geoInfo.city, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
+      `INSERT INTO analytics (slug, link_type, link_id, link_title, user_agent, ip_address, country, country_code, os, browser, device, referrer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      ['main', link_type, safe_link_id, safe_link_title, user_agent, geoInfo.ip, geoInfo.country, geoInfo.countryCode, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
     );
 
     res.json({ ok: true });
@@ -966,62 +936,35 @@ app.post('/api/analytics/reset', requireAuth, async (req, res) => {
 // ═══ TEST: Insert test click ═══
 app.post('/api/analytics/test-click', requireAuth, async (req, res) => {
   try {
-    // Get all possible IP sources for debugging
-    const xff = req.headers['x-forwarded-for'];
-    const xri = req.headers['x-real-ip'];
-    const cfip = req.headers['cf-connecting-ip'];
-    const reqIp = req.ip;
-
-    // Try to get real IP
-    let ip = cfip || xff?.split(',')[0]?.trim() || xri || reqIp || '';
-    ip = ip.replace('::ffff:', '').trim();
-
-    // Try GeoIP lookup
-    let geoInfo = null;
-    let geoError = null;
-    try {
-      if (ip && !ip.startsWith('10.') && !ip.startsWith('192.168.') && !ip.startsWith('172.') && ip !== '127.0.0.1') {
-        geoInfo = geoip.lookup(ip);
-      }
-    } catch (e) {
-      geoError = e.message;
-    }
-
-    // Parse user agent for real device info
+    // Use the new proper IP and UA detection
     const ua = req.headers['user-agent'] || '';
-    const deviceInfo = parseUserAgent(ua);
-
-    // Use real data or fallback to test data
-    const country = geoInfo?.name || 'Israel';
-    const countryCode = geoInfo?.country || 'IL';
+    const deviceInfo = parseUserAgent(ua, req.headers);
+    const geoInfo = getCountryFromIP(req);
 
     await pool.query(
       `INSERT INTO analytics (slug, link_type, link_id, link_title, user_agent, ip_address, country, country_code, os, browser, device, referrer)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      ['main', 'test', 'test-' + Date.now(), 'Test Link', ua, ip,
-       country, countryCode,
-       deviceInfo.os || 'Unknown', deviceInfo.browser || 'Unknown', deviceInfo.device || 'Unknown', 'test']
+      ['main', 'test', 'test-' + Date.now(), 'Test Link', ua, geoInfo.ip,
+       geoInfo.country, geoInfo.countryCode,
+       deviceInfo.os, deviceInfo.browser, deviceInfo.device, 'test']
     );
 
     const count = await pool.query('SELECT COUNT(*) FROM analytics');
     res.json({
       success: true,
       total_clicks: parseInt(count.rows[0].count),
-      debug: {
-        xff: xff || 'none',
-        xri: xri || 'none',
-        cfip: cfip || 'none',
-        reqIp: reqIp || 'none',
-        finalIp: ip || 'none',
-        geoResult: geoInfo,
-        geoError: geoError
-      },
-      recorded: {
-        country: country,
-        countryCode: countryCode,
+      detected: {
+        ip: geoInfo.ip,
+        country: geoInfo.country,
+        countryCode: geoInfo.countryCode,
         os: deviceInfo.os,
         browser: deviceInfo.browser,
         device: deviceInfo.device
+      },
+      debug: {
+        reqIp: req.ip,
+        xff: req.headers['x-forwarded-for'] || 'none',
+        isPublic: isPublicIP(geoInfo.ip)
       }
     });
   } catch (e) {
@@ -1108,7 +1051,6 @@ app.get('/go/:encodedLink', async (req, res) => {
     const { encodedLink } = req.params;
     const { t: linkType, n: linkTitle } = req.query;
     const user_agent = (req.headers['user-agent'] || '').slice(0, 500);
-    const ip_address = (req.headers['x-forwarded-for']?.split(',')[0] || req.ip || '').slice(0, 45);
 
     // ══════════════════════════════════════════════════════════════════
     // CRITICAL: Bot Detection - Never reveal URLs to crawlers/bots
@@ -1146,16 +1088,16 @@ app.get('/go/:encodedLink', async (req, res) => {
     const safeType = ['social', 'featured', 'carousel'].includes(linkType) ? linkType : 'redirect';
     const safeTitle = (linkTitle || 'Link').slice(0, 200).replace(/[<>"'&]/g, '');
 
-    // Parse device/location for analytics (instant - uses offline GeoIP database)
-    const deviceInfo = parseUserAgent(user_agent);
-    const geoInfo = getCountryFromIP(ip_address, req);
+    // Parse device/location for analytics
+    const deviceInfo = parseUserAgent(user_agent, req.headers);
+    const geoInfo = getCountryFromIP(req);
 
     // SECURITY: Only store opaque ID (hash of encrypted link), NOT the actual URL
     const linkId = crypto.createHash('sha256').update(encodedLink).digest('hex').slice(0, 16);
     await pool.query(
-      `INSERT INTO analytics (slug, link_type, link_id, link_title, user_agent, ip_address, country, country_code, city, os, browser, device, referrer)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-      ['main', safeType, linkId, safeTitle, user_agent, ip_address, geoInfo.country, geoInfo.countryCode, geoInfo.city, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
+      `INSERT INTO analytics (slug, link_type, link_id, link_title, user_agent, ip_address, country, country_code, os, browser, device, referrer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      ['main', safeType, linkId, safeTitle, user_agent, geoInfo.ip, geoInfo.country, geoInfo.countryCode, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
     );
 
     // ══════════════════════════════════════════════════════════════════
