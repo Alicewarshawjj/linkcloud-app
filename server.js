@@ -13,7 +13,27 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
-const LINK_SECRET_BASE = process.env.LINK_SECRET || 'cmehere-secure-2024-xK9mP2vL';
+
+// SECURITY: Generate unique secret per deployment if not set
+// This ensures that even without LINK_SECRET env var, each deployment has unique encryption
+const LINK_SECRET_BASE = process.env.LINK_SECRET || (() => {
+  // Use a combination that's unique per deployment but stable across restarts
+  const uniqueFactors = [
+    process.env.RAILWAY_DEPLOYMENT_ID,
+    process.env.RAILWAY_SERVICE_ID,
+    process.env.DATABASE_URL?.slice(-20),
+    process.env.PORT,
+    __dirname
+  ].filter(Boolean).join('-');
+
+  if (uniqueFactors.length > 10) {
+    console.log('🔐 Using deployment-unique encryption key');
+    return `cmehere-auto-${require('crypto').createHash('sha256').update(uniqueFactors).digest('hex').slice(0, 32)}`;
+  }
+  // Last resort fallback - still log warning
+  console.warn('⚠️ WARNING: Using default encryption key. Set LINK_SECRET env var for production!');
+  return 'cmehere-secure-2024-xK9mP2vL';
+})();
 
 // Database ready flag (for graceful startup)
 let dbReady = false;
@@ -992,6 +1012,26 @@ app.get('/go/:encodedLink', async (req, res) => {
   try {
     const { encodedLink } = req.params;
     const { t: linkType, n: linkTitle } = req.query;
+    const user_agent = (req.headers['user-agent'] || '').slice(0, 500);
+    const ip_address = (req.headers['x-forwarded-for']?.split(',')[0] || req.ip || '').slice(0, 45);
+
+    // ══════════════════════════════════════════════════════════════════
+    // CRITICAL: Bot Detection - Never reveal URLs to crawlers/bots
+    // This prevents Instagram/Facebook from discovering OnlyFans links
+    // ══════════════════════════════════════════════════════════════════
+    const botScore = calculateBotScore(req);
+
+    if (botScore >= 50) {
+      // Bot detected - serve a decoy page, NEVER redirect to real URL
+      return res.status(200).send(`<!DOCTYPE html>
+<html><head><title>Link</title><meta name="robots" content="noindex,nofollow"></head>
+<body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0a0a14">
+<div style="text-align:center;color:#fff">
+<h1>🔗 Link</h1>
+<p style="color:#888">This link requires a browser to access.</p>
+<p style="color:#666;font-size:12px">Bot score: ${botScore}</p>
+</div></body></html>`);
+    }
 
     // Validate encoded link format
     if (!encodedLink || encodedLink.length > 1000) {
@@ -1005,9 +1045,6 @@ app.get('/go/:encodedLink', async (req, res) => {
       return res.status(404).send('Link not found');
     }
 
-    // Track the click - SECURITY: Do NOT store URL
-    const user_agent = (req.headers['user-agent'] || '').slice(0, 500);
-    const ip_address = (req.headers['x-forwarded-for']?.split(',')[0] || req.ip || '').slice(0, 45);
     const referrer = (req.headers.referer || '').slice(0, 500);
 
     // Sanitize query params
@@ -1029,16 +1066,27 @@ app.get('/go/:encodedLink', async (req, res) => {
       ['main', safeType, linkId, safeTitle, user_agent, ip_address, geoInfo.country, geoInfo.countryCode, geoInfo.city, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
     );
 
-    // Redirect to actual URL (only decoded server-side)
-    res.redirect(302, url);
+    // ══════════════════════════════════════════════════════════════════
+    // SECURITY: Use JavaScript redirect instead of HTTP 302
+    // This prevents bots from seeing the URL in Location header
+    // Real browsers execute JS, bots don't get the URL
+    // ══════════════════════════════════════════════════════════════════
+    res.status(200).send(`<!DOCTYPE html>
+<html><head>
+<meta name="robots" content="noindex,nofollow">
+<meta http-equiv="refresh" content="0;url=${url.replace(/"/g, '&quot;')}">
+<script>window.location.replace("${url.replace(/"/g, '\\"').replace(/\\/g, '\\\\')}");</script>
+</head><body style="background:#0a0a14"></body></html>`);
   } catch (e) {
-    console.error('🔗 REDIRECT ERROR:', e.message, e.stack?.slice(0, 300));
     // Don't fail the redirect just because analytics failed
-    // Try to redirect anyway if we have a valid URL
+    // Try to redirect anyway if we have a valid URL (using JS redirect for security)
     const url = decodeLink(req.params.encodedLink);
     if (url && url.startsWith('http')) {
-      console.log('🔗 Redirecting despite analytics error to:', url.slice(0, 50));
-      return res.redirect(302, url);
+      return res.status(200).send(`<!DOCTYPE html>
+<html><head><meta name="robots" content="noindex,nofollow">
+<meta http-equiv="refresh" content="0;url=${url.replace(/"/g, '&quot;')}">
+<script>window.location.replace("${url.replace(/"/g, '\\"').replace(/\\/g, '\\\\')}");</script>
+</head><body style="background:#0a0a14"></body></html>`);
     }
     res.status(404).send('Link not found');
   }
