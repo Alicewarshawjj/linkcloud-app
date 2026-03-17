@@ -1367,8 +1367,10 @@ app.get('/', async (req, res) => {
   }
 });
 
-/// ═══ FACEBOOK ESCAPE: Dedicated route for Facebook in-app browser ═══
-// Facebook WKWebView blocks URL schemes, so we use different techniques
+// ═══ FACEBOOK ESCAPE: Dedicated route for Facebook in-app browser ═══
+// Key insight from juicy.bio: They redirect to a Universal Link (like instagram.com)
+// which triggers iOS "Open in App?" dialog - escaping Facebook's browser
+// For us: We'll try direct link + Safari scheme, then show manual options
 app.get('/fb', (req, res) => {
   const ua = req.headers['user-agent'] || '';
   const isFacebook = ua.includes('FBAN') || ua.includes('FBAV');
@@ -1381,140 +1383,79 @@ app.get('/fb', (req, res) => {
   }
 
   const targetUrl = `https://${req.hostname}/?browser=1`;
+  const safariUrl = `x-safari-https://${req.hostname}/?browser=1`;
 
   res.send(`<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>Opening...</title>
+<title>Continue</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#000;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center}
-.container{max-width:320px;width:100%}
-h1{font-size:24px;margin-bottom:16px}
-p{color:#888;font-size:14px;margin-bottom:24px;line-height:1.5}
-.btn{display:block;width:100%;padding:16px 24px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;border-radius:12px;font-size:16px;font-weight:600;margin-bottom:12px;border:none;cursor:pointer}
-.btn:active{transform:scale(0.98)}
-.btn-secondary{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2)}
-.note{font-size:12px;color:#666;margin-top:20px}
-.spinner{width:32px;height:32px;border:3px solid #333;border-top-color:#667eea;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 20px}
-@keyframes spin{to{transform:rotate(360deg)}}
-.hidden{display:none}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a14;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.box{max-width:320px;width:100%;text-align:center}
+h1{font-size:20px;margin-bottom:8px;font-weight:600}
+.sub{color:#888;font-size:14px;margin-bottom:24px}
+.btn{display:block;width:100%;padding:16px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;border-radius:14px;font-size:16px;font-weight:600;border:none;cursor:pointer;margin-bottom:10px;-webkit-tap-highlight-color:transparent}
+.btn:active{opacity:0.9;transform:scale(0.98)}
+.btn2{background:#1c1c2e;border:1px solid #333}
+.btn3{background:transparent;border:1px solid #444;color:#777;font-size:14px}
+.tip{margin-top:20px;padding:16px;background:#111;border-radius:12px;text-align:left}
+.tip-title{font-size:12px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.tip-text{font-size:13px;color:#999;line-height:1.5}
+.tip-text strong{color:#ccc}
 </style>
 </head><body>
-<div class="container">
-  <div id="autoMode">
-    <div class="spinner"></div>
-    <p>Trying to open in browser...</p>
-  </div>
-  <div id="manualMode" class="hidden">
-    <h1>Open in Browser</h1>
-    <p>Facebook's browser can't open this link directly. Tap the button below:</p>
-    <a id="mainBtn" class="btn" href="${targetUrl}" target="_blank" rel="noopener">Open in Safari ↗</a>
-    <button id="copyBtn" class="btn btn-secondary">Copy Link</button>
-    <p class="note">Or tap ⋯ menu → Open in Browser</p>
+<div class="box">
+  <h1>Open in Browser</h1>
+  <p class="sub">Facebook blocks external links</p>
+
+  <a class="btn" href="${safariUrl}" id="safariLink">Open in Safari ↗</a>
+  <a class="btn btn2" href="${targetUrl}" target="_blank" rel="noopener">Direct Link</a>
+  <button class="btn btn3" id="copyBtn">Copy Link</button>
+
+  <div class="tip">
+    <div class="tip-title">Not working?</div>
+    <div class="tip-text">
+      Tap <strong>⋯</strong> at bottom right<br>
+      Then tap <strong>"Open in Browser"</strong>
+    </div>
   </div>
 </div>
 <script>
 (function(){
-  var targetUrl = "${targetUrl}";
-  var ua = navigator.userAgent || '';
-  var isIOS = /iPhone|iPad|iPod/i.test(ua);
-  var isAndroid = /Android/i.test(ua);
-  var tried = 0;
-  var maxTries = 5;
+  var url="${targetUrl}";
+  var safariUrl="${safariUrl}";
+  var ua=navigator.userAgent||'';
+  var isIOS=/iPhone|iPad|iPod/i.test(ua);
+  var isAndroid=/Android/i.test(ua);
 
-  function showManual() {
-    document.getElementById('autoMode').classList.add('hidden');
-    document.getElementById('manualMode').classList.remove('hidden');
-  }
-
-  function tryMethod(method) {
-    tried++;
-    try {
-      method();
-    } catch(e) {}
-    if (tried >= maxTries) {
-      setTimeout(showManual, 500);
-    }
-  }
-
-  // Copy button handler
-  document.getElementById('copyBtn').onclick = function() {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(targetUrl).then(function() {
-        alert('Link copied!\\n\\nPaste in Safari or tap ⋯ → Open in Browser');
+  // Copy button
+  document.getElementById('copyBtn').onclick=function(){
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(url).then(function(){
+        alert('Copied! Paste in Safari.');
       });
-    } else {
-      prompt('Copy this link:', targetUrl);
+    }else{
+      prompt('Copy:',url);
     }
   };
 
-  if (isIOS) {
-    // iOS Facebook - try multiple methods with delays
-    // Method 1: x-safari-https (sometimes works)
-    setTimeout(function() {
-      tryMethod(function() {
-        var stripped = targetUrl.replace(/^https?:\\/\\//, '');
-        window.location.href = 'x-safari-https://' + stripped;
-      });
-    }, 100);
-
-    // Method 2: googlechrome scheme
-    setTimeout(function() {
-      tryMethod(function() {
-        var stripped = targetUrl.replace(/^https?:\\/\\//, '');
-        window.location.href = 'googlechrome://' + stripped;
-      });
-    }, 400);
-
-    // Method 3: window.open with _blank
-    setTimeout(function() {
-      tryMethod(function() {
-        var w = window.open(targetUrl, '_blank');
-        if (!w) throw new Error('blocked');
-      });
-    }, 700);
-
-    // Method 4: create anchor and click
-    setTimeout(function() {
-      tryMethod(function() {
-        var a = document.createElement('a');
-        a.href = targetUrl;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        document.body.appendChild(a);
-        a.click();
-      });
-    }, 1000);
-
-    // Method 5: location.assign
-    setTimeout(function() {
-      tryMethod(function() {
-        window.location.assign(targetUrl);
-      });
-    }, 1300);
-
-    // Show manual mode after all tries
-    setTimeout(showManual, 2000);
-
-  } else if (isAndroid) {
-    // Android Facebook - intent works better
-    setTimeout(function() {
-      tryMethod(function() {
-        var intentUrl = 'intent://' + targetUrl.replace(/^https?:\\/\\//, '') +
-          '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' +
-          encodeURIComponent(targetUrl) + ';end';
-        window.location.href = intentUrl;
-      });
-    }, 100);
-
-    setTimeout(showManual, 2000);
-  } else {
-    // Not mobile - just redirect
-    window.location.href = targetUrl;
+  // Android: auto-redirect with intent
+  if(isAndroid){
+    setTimeout(function(){
+      window.location.href='intent://'+url.replace(/^https?:\\/\\//,'')+'#Intent;scheme=https;end';
+    },300);
   }
+
+  // iOS: Safari link click handler - try multiple methods
+  document.getElementById('safariLink').onclick=function(e){
+    // Let the href work first, but also try window.open
+    setTimeout(function(){
+      try{window.open(url,'_blank');}catch(x){}
+    },200);
+  };
 })();
 </script>
 </body></html>`);
@@ -1552,89 +1493,69 @@ app.get('/fb-go/:encodedLink', async (req, res) => {
     return res.redirect(targetUrl);
   }
 
-  // Facebook in-app browser - show escape page
+  // Facebook in-app browser - show escape page with Safari scheme
+  const safariUrl = targetUrl.replace(/^https?:\/\//, 'x-safari-https://');
+
   res.send(`<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>Opening Link...</title>
+<title>Open Link</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#000;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center}
-.container{max-width:320px;width:100%}
-h1{font-size:22px;margin-bottom:12px}
-p{color:#888;font-size:14px;margin-bottom:20px;line-height:1.5}
-.btn{display:block;width:100%;padding:16px 24px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;border-radius:12px;font-size:16px;font-weight:600;margin-bottom:12px;border:none;cursor:pointer}
-.btn:active{transform:scale(0.98)}
-.btn-secondary{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2)}
-.spinner{width:32px;height:32px;border:3px solid #333;border-top-color:#667eea;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 20px}
-@keyframes spin{to{transform:rotate(360deg)}}
-.hidden{display:none}
-.note{font-size:12px;color:#555;margin-top:16px}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a14;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.box{max-width:320px;width:100%;text-align:center}
+h1{font-size:20px;margin-bottom:8px;font-weight:600}
+.sub{color:#888;font-size:14px;margin-bottom:24px}
+.btn{display:block;width:100%;padding:16px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;border-radius:14px;font-size:16px;font-weight:600;border:none;cursor:pointer;margin-bottom:10px;-webkit-tap-highlight-color:transparent}
+.btn:active{opacity:0.9;transform:scale(0.98)}
+.btn2{background:#1c1c2e;border:1px solid #333}
+.btn3{background:transparent;border:1px solid #444;color:#777;font-size:14px}
+.tip{margin-top:20px;padding:16px;background:#111;border-radius:12px;text-align:left}
+.tip-title{font-size:12px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.tip-text{font-size:13px;color:#999;line-height:1.5}
+.tip-text strong{color:#ccc}
 </style>
 </head><body>
-<div class="container">
-  <div id="autoMode">
-    <div class="spinner"></div>
-    <p>Opening link...</p>
-  </div>
-  <div id="manualMode" class="hidden">
-    <h1>Open in Browser</h1>
-    <p>This link needs to open in Safari</p>
-    <a id="openBtn" class="btn" href="${targetUrl}" target="_blank">Open Link ↗</a>
-    <button id="copyBtn" class="btn btn-secondary">Copy Link</button>
-    <p class="note">Tip: Tap ⋯ → Open in Browser</p>
+<div class="box">
+  <h1>Open Link</h1>
+  <p class="sub">Facebook blocks external links</p>
+
+  <a class="btn" href="${safariUrl}" id="safariLink">Open in Safari ↗</a>
+  <a class="btn btn2" href="${targetUrl}" target="_blank" rel="noopener">Direct Link</a>
+  <button class="btn btn3" id="copyBtn">Copy Link</button>
+
+  <div class="tip">
+    <div class="tip-title">Not working?</div>
+    <div class="tip-text">
+      Tap <strong>⋯</strong> at bottom right<br>
+      Then tap <strong>"Open in Browser"</strong>
+    </div>
   </div>
 </div>
 <script>
 (function(){
-  var url = "${targetUrl.replace(/"/g, '\\"')}";
-  var ua = navigator.userAgent || '';
-  var isIOS = /iPhone|iPad|iPod/i.test(ua);
-  var tried = 0;
+  var url="${targetUrl.replace(/"/g, '\\"')}";
+  var ua=navigator.userAgent||'';
+  var isIOS=/iPhone|iPad|iPod/i.test(ua);
+  var isAndroid=/Android/i.test(ua);
 
-  function showManual() {
-    document.getElementById('autoMode').classList.add('hidden');
-    document.getElementById('manualMode').classList.remove('hidden');
-  }
-
-  document.getElementById('copyBtn').onclick = function() {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(url).then(function() {
-        alert('Link copied! Paste in Safari.');
+  document.getElementById('copyBtn').onclick=function(){
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(url).then(function(){
+        alert('Copied! Paste in Safari.');
       });
-    } else {
-      prompt('Copy this link:', url);
+    }else{
+      prompt('Copy:',url);
     }
   };
 
-  if (isIOS) {
-    // Try multiple escape methods
-    var methods = [
-      function() { window.location.href = 'x-safari-https://' + url.replace(/^https?:\\/\\//, ''); },
-      function() { window.location.href = 'googlechrome://' + url.replace(/^https?:\\/\\//, ''); },
-      function() { var w = window.open(url, '_blank'); },
-      function() { var a = document.createElement('a'); a.href = url; a.target = '_blank'; document.body.appendChild(a); a.click(); },
-      function() { window.location.href = url; }
-    ];
-
-    var i = 0;
-    function tryNext() {
-      if (i < methods.length) {
-        try { methods[i](); } catch(e) {}
-        i++;
-        setTimeout(tryNext, 400);
-      } else {
-        setTimeout(showManual, 500);
-      }
-    }
-    tryNext();
-  } else {
-    // Android - use intent
-    var intentUrl = 'intent://' + url.replace(/^https?:\\/\\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
-    setTimeout(function() { window.location.href = intentUrl; }, 100);
-    setTimeout(showManual, 2000);
+  // Android: auto-redirect with intent
+  if(isAndroid){
+    setTimeout(function(){
+      window.location.href='intent://'+url.replace(/^https?:\\/\\//,'')+'#Intent;scheme=https;end';
+    },300);
   }
 })();
 </script>
