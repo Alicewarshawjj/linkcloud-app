@@ -932,6 +932,33 @@ app.get('/api/analytics/live', requireAuth, async (req, res) => {
   }
 });
 
+// ═══ DEBUG: Show User Agent (for testing in-app detection) ═══
+app.get('/api/debug-ua', (req, res) => {
+  const ua = req.headers['user-agent'] || '';
+  const ref = req.headers['referer'] || req.headers['referrer'] || '';
+
+  const checks = {
+    Instagram: ua.includes('Instagram'),
+    Facebook: ua.includes('FBAN') || ua.includes('FBAV'),
+    TikTok: ua.includes('TikTok'),
+    LinkedIn: ua.includes('LinkedInApp'),
+    Twitter: ua.includes('Twitter') || ref.includes('t.co') || ref.includes('x.com'),
+    Threads: ua.includes('Threads') || ua.includes('Barcelona') || ref.includes('threads.net'),
+    Snapchat: ua.includes('Snapchat') || ua.includes('snapchat')
+  };
+
+  const isInApp = Object.values(checks).some(v => v);
+
+  res.json({
+    user_agent: ua,
+    referrer: ref,
+    is_in_app_browser: isInApp,
+    detected_apps: checks,
+    is_ios: /iPhone|iPad|iPod/i.test(ua),
+    is_android: /Android/i.test(ua)
+  });
+});
+
 // ═══ DEBUG: Check analytics table ═══
 app.get('/api/analytics/debug', requireAuth, async (req, res) => {
   try {
