@@ -10,7 +10,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const crypto = require('crypto');
 const net = require('net');
-const geoip = require('geoip-country');
+const geoip = require('geoip-lite');
 const UAParser = require('ua-parser-js');
 
 const app = express();
@@ -105,7 +105,8 @@ async function initDB() {
       'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS device VARCHAR(20)',
       'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS link_title TEXT',
       'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS link_id VARCHAR(100)',
-      'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS source VARCHAR(50)'
+      'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS source VARCHAR(50)',
+      'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS region VARCHAR(100)'
     ];
 
     for (const migration of migrations) {
@@ -383,8 +384,10 @@ function getCountryFromIP(req) {
     const geo = geoip.lookup(ip);
     if (geo && geo.country) {
       return {
-        country: geo.name || geo.country,
+        country: geo.country,
         countryCode: geo.country,
+        region: geo.region || null,
+        city: geo.city || null,
         ip
       };
     }
@@ -392,7 +395,7 @@ function getCountryFromIP(req) {
     console.log('🌍 GEO error:', e.message);
   }
 
-  return { country: 'Unknown', countryCode: 'XX', ip };
+  return { country: 'Unknown', countryCode: 'XX', region: null, city: null, ip };
 }
 
 // ═══ LINK ENCRYPTION (AES-256-GCM) ═══
@@ -759,9 +762,9 @@ app.post('/api/analytics/click', analyticsLimiter, async (req, res) => {
 
     // SECURITY: Do NOT store link_url - it could leak protected URLs
     await pool.query(
-      `INSERT INTO analytics (slug, source, link_type, link_id, link_title, user_agent, ip_address, country, country_code, os, browser, device, referrer)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-      ['main', null, link_type, safe_link_id, safe_link_title, user_agent, geoInfo.ip, geoInfo.country, geoInfo.countryCode, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
+      `INSERT INTO analytics (slug, source, link_type, link_id, link_title, user_agent, ip_address, country, country_code, region, os, browser, device, referrer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+      ['main', null, link_type, safe_link_id, safe_link_title, user_agent, geoInfo.ip, geoInfo.country, geoInfo.countryCode, geoInfo.region, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
     );
 
     res.json({ ok: true });
@@ -899,8 +902,15 @@ app.get('/api/analytics/live', requireAuth, async (req, res) => {
   try {
     const since = req.query.since || new Date(Date.now() - 60000).toISOString(); // Last minute default
 
+    // Get actual total count for the time period (not limited)
+    const countResult = await pool.query(`
+      SELECT COUNT(*) FROM analytics WHERE clicked_at > $1
+    `, [since]);
+    const totalCount = parseInt(countResult.rows[0].count);
+
+    // Get the latest 50 clicks for display (with region for US states)
     const result = await pool.query(`
-      SELECT id, link_type, link_title, country, country_code, device, browser, os, source, clicked_at
+      SELECT id, link_type, link_title, country, country_code, region, device, browser, os, source, clicked_at
       FROM analytics
       WHERE clicked_at > $1
       ORDER BY clicked_at DESC
@@ -915,7 +925,7 @@ app.get('/api/analytics/live', requireAuth, async (req, res) => {
     res.json({
       clicks: result.rows,
       latest: latestTimestamp,
-      count: result.rows.length
+      count: totalCount
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -986,10 +996,10 @@ app.post('/api/analytics/test-click', requireAuth, async (req, res) => {
     const geoInfo = getCountryFromIP(req);
 
     await pool.query(
-      `INSERT INTO analytics (slug, source, link_type, link_id, link_title, user_agent, ip_address, country, country_code, os, browser, device, referrer)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      `INSERT INTO analytics (slug, source, link_type, link_id, link_title, user_agent, ip_address, country, country_code, region, os, browser, device, referrer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
       ['main', 'test-click', 'test', 'test-' + Date.now(), 'Test Link', ua, geoInfo.ip,
-       geoInfo.country, geoInfo.countryCode,
+       geoInfo.country, geoInfo.countryCode, geoInfo.region,
        deviceInfo.os, deviceInfo.browser, deviceInfo.device, 'test']
     );
 
@@ -1141,9 +1151,9 @@ app.get('/go/:encodedLink', async (req, res) => {
     // SECURITY: Only store opaque ID (hash of encrypted link), NOT the actual URL
     const linkId = crypto.createHash('sha256').update(encodedLink).digest('hex').slice(0, 16);
     await pool.query(
-      `INSERT INTO analytics (slug, source, link_type, link_id, link_title, user_agent, ip_address, country, country_code, os, browser, device, referrer)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-      ['main', safeSource, safeType, linkId, safeTitle, user_agent, geoInfo.ip, geoInfo.country, geoInfo.countryCode, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
+      `INSERT INTO analytics (slug, source, link_type, link_id, link_title, user_agent, ip_address, country, country_code, region, os, browser, device, referrer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+      ['main', safeSource, safeType, linkId, safeTitle, user_agent, geoInfo.ip, geoInfo.country, geoInfo.countryCode, geoInfo.region, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
     );
 
     // ══════════════════════════════════════════════════════════════════

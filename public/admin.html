@@ -1080,6 +1080,14 @@ function renderLiveFeed(recent, isUpdate = false) {
         const isNew = isUpdate && !seenClickIds.has(click.id);
         const sourceTag = click.source ? `<span class="feed-source">${click.source}</span>` : '';
 
+        // Build location string with region/state for US
+        let location = click.country || 'Unknown';
+        if (click.region && click.country_code === 'US') {
+            location = `${click.region}, US`;
+        } else if (click.region) {
+            location = `${click.country} (${click.region})`;
+        }
+
         // Track seen IDs
         if (click.id) seenClickIds.add(click.id);
 
@@ -1089,7 +1097,7 @@ function renderLiveFeed(recent, isUpdate = false) {
                 <div class="feed-info">
                     <div class="feed-title">${title}</div>
                     <div class="feed-meta">
-                        <span>📍 ${click.country || 'Unknown'}</span>
+                        <span>📍 ${location}</span>
                         <span>📱 ${click.device || 'Unknown'}</span>
                         ${sourceTag}
                     </div>
