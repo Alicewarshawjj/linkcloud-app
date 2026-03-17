@@ -358,7 +358,17 @@ async function getCountryFromIP(ip, req = null) {
     return { country: 'Local', countryCode: 'XX', city: 'Local' };
   }
 
-  const cleanIP = ip.split(':')[0].trim();
+  // Clean IP - handle IPv6 format like ::ffff:1.2.3.4
+  let cleanIP = ip;
+  if (ip.includes('::ffff:')) {
+    cleanIP = ip.split('::ffff:')[1];
+  } else if (ip.includes(':') && ip.includes('.')) {
+    // Mixed format
+    cleanIP = ip.split(':').pop();
+  }
+  cleanIP = cleanIP.trim();
+
+  console.log('🌐 IP Lookup:', { original: ip, clean: cleanIP });
 
   // Try ipinfo.io (HTTPS, 50K req/month free)
   try {
@@ -740,8 +750,21 @@ app.post('/api/analytics/click', analyticsLimiter, async (req, res) => {
     const safe_link_title = sanitize(link_title, 200);
 
     const user_agent = (req.headers['user-agent'] || '').slice(0, 500);
-    const ip_address = (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '').slice(0, 45);
+    // Try CF-Connecting-IP first (Cloudflare real IP), then x-forwarded-for
+    const ip_address = (
+      req.headers['cf-connecting-ip'] ||
+      req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+      req.ip || ''
+    ).slice(0, 45);
     const referrer = (req.headers.referer || '').slice(0, 500);
+
+    // Debug logging
+    console.log('📊 CLICK DEBUG:', {
+      ip: ip_address,
+      cfIP: req.headers['cf-connecting-ip'],
+      xForwarded: req.headers['x-forwarded-for'],
+      cfCountry: req.headers['cf-ipcountry']
+    });
 
     // Parse device info
     const deviceInfo = parseUserAgent(user_agent);
@@ -750,7 +773,9 @@ app.post('/api/analytics/click', analyticsLimiter, async (req, res) => {
     let geoInfo = { country: 'Unknown', countryCode: 'XX', city: '' };
     try {
       geoInfo = await getCountryFromIP(ip_address, req);
+      console.log('📊 GEO RESULT:', geoInfo);
     } catch (geoErr) {
+      console.log('📊 GEO ERROR:', geoErr.message);
       // Silently continue with unknown location
     }
 
