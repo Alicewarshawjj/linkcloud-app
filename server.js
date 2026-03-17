@@ -931,6 +931,105 @@ app.get('/special-offer', (req, res) => {
   res.redirect(301, 'https://example.com/expired');
 });
 
+// ═══ DEBUG: Analytics Raw Data ═══
+app.get('/api/debug/analytics', requireAuth, async (req, res) => {
+  try {
+    // Show raw database records
+    const result = await pool.query(
+      `SELECT id, link_type, link_title, country, country_code, city, os, browser, device, clicked_at
+       FROM analytics
+       ORDER BY clicked_at DESC
+       LIMIT 20`
+    );
+
+    // Also show headers being received
+    const headers = {
+      'cf-ipcountry': req.headers['cf-ipcountry'],
+      'cf-ipcity': req.headers['cf-ipcity'],
+      'cf-ray': req.headers['cf-ray'],
+      'cf-connecting-ip': req.headers['cf-connecting-ip'],
+      'x-forwarded-for': req.headers['x-forwarded-for'],
+      'x-real-ip': req.headers['x-real-ip']
+    };
+
+    res.json({
+      message: 'Debug analytics data',
+      headers_received: headers,
+      total_records: result.rowCount,
+      recent_records: result.rows
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ═══ DEBUG: Test Geolocation Detection ═══
+app.get('/api/debug/geo', async (req, res) => {
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+             req.headers['cf-connecting-ip'] ||
+             req.ip || '';
+
+  // Test all geolocation methods
+  const results = {
+    your_ip: ip,
+    cloudflare_headers: {
+      'cf-ipcountry': req.headers['cf-ipcountry'] || 'NOT SET',
+      'cf-ipcity': req.headers['cf-ipcity'] || 'NOT SET',
+      'cf-ray': req.headers['cf-ray'] || 'NOT SET (Cloudflare not proxying)',
+      'cf-connecting-ip': req.headers['cf-connecting-ip'] || 'NOT SET'
+    },
+    railway_headers: {
+      'x-forwarded-for': req.headers['x-forwarded-for'] || 'NOT SET',
+      'x-real-ip': req.headers['x-real-ip'] || 'NOT SET'
+    },
+    detection_results: {}
+  };
+
+  // Test CDN detection
+  const cdnGeo = getGeoFromRequest(req);
+  results.detection_results.cdn_method = cdnGeo || 'FAILED - No CDN headers';
+
+  // Test IP API fallback
+  try {
+    const geoResult = await getCountryFromIP(ip, req);
+    results.detection_results.final_result = geoResult;
+  } catch (e) {
+    results.detection_results.final_result = { error: e.message };
+  }
+
+  // Test external APIs directly
+  try {
+    let cleanIP = ip;
+    if (ip.includes('::ffff:')) cleanIP = ip.split('::ffff:')[1];
+
+    const ipinfoRes = await fetch(`https://ipinfo.io/${cleanIP}/json`, {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(3000)
+    });
+    if (ipinfoRes.ok) {
+      results.detection_results.ipinfo_api = await ipinfoRes.json();
+    } else {
+      results.detection_results.ipinfo_api = { error: `HTTP ${ipinfoRes.status}` };
+    }
+  } catch (e) {
+    results.detection_results.ipinfo_api = { error: e.message };
+  }
+
+  try {
+    let cleanIP = ip;
+    if (ip.includes('::ffff:')) cleanIP = ip.split('::ffff:')[1];
+
+    const ipApiRes = await fetch(`http://ip-api.com/json/${cleanIP}?fields=status,country,countryCode,city,message`, {
+      signal: AbortSignal.timeout(3000)
+    });
+    results.detection_results.ip_api = await ipApiRes.json();
+  } catch (e) {
+    results.detection_results.ip_api = { error: e.message };
+  }
+
+  res.json(results);
+});
+
 // ═══ LINK REDIRECT (Server-Side AES-256-GCM Decryption) ═══
 // Links are encrypted with AES-256-GCM - only the server has the key
 // Even crawlers with full source code access cannot decode links
