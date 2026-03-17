@@ -1428,54 +1428,37 @@ a{color:#fff;margin-top:20px}
 });
 
 // ═══ FACEBOOK DEDICATED ROUTE ═══
-// Facebook's in-app browser is stubborn - needs dedicated route with different methods
+// Facebook blocks URL schemes - use button with target="_blank" which FB respects on user tap
 app.get('/facebook', (req, res) => {
   if (req.query.browser === '1') {
     return res.redirect('/');
   }
-  // Facebook-specific: Use only direct Safari scheme (no about:blank which FB blocks)
+  // Facebook-specific: Show button that user taps - FB respects target="_blank" on user interaction
   res.send(`<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Opening...</title>
+<title>Open in Safari</title>
 <style>
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#000;color:#fff}
-.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-p{margin-top:20px;opacity:0.7}
-a{color:#fff;margin-top:20px;padding:15px 30px;background:#1877f2;border-radius:8px;text-decoration:none}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);color:#fff;padding:20px}
+.container{text-align:center;max-width:320px}
+.icon{font-size:48px;margin-bottom:20px}
+h1{font-size:22px;margin:0 0 10px;font-weight:600}
+p{font-size:14px;opacity:0.7;margin:0 0 30px;line-height:1.5}
+.btn{display:block;width:100%;padding:16px 24px;background:#0095f6;color:#fff;text-decoration:none;border-radius:12px;font-size:17px;font-weight:600;transition:transform 0.2s,background 0.2s}
+.btn:active{transform:scale(0.98);background:#007acc}
+.alt{margin-top:20px;font-size:13px;opacity:0.5}
+.alt a{color:#fff}
 </style>
 </head><body>
-<div class="spinner"></div>
-<p>Opening in Safari...</p>
-<a href="/?browser=1" id="manual">Tap here if nothing happens</a>
-<script>
-(function(){
-  var url='https://'+location.hostname+'/?browser=1';
-  var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
-  var isAndroid=/Android/i.test(navigator.userAgent);
-  if(isIOS){
-    // Facebook iOS: Try Safari scheme directly, then Chrome
-    var s=url.replace(/^https?:\\/\\//,'');
-    setTimeout(function(){location.href='x-safari-https://'+s},100);
-    setTimeout(function(){location.href='googlechrome://'+s},600);
-    // Fallback: create hidden link and click it
-    setTimeout(function(){
-      var a=document.createElement('a');
-      a.href=url;
-      a.target='_blank';
-      a.rel='noopener';
-      document.body.appendChild(a);
-      a.click();
-    },1100);
-  }else if(isAndroid){
-    location.href='intent://'+location.hostname+'/?browser=1#Intent;scheme=https;package=com.android.chrome;end';
-  }else{
-    location.href=url;
-  }
-})();
-</script>
+<div class="container">
+<div class="icon">🔗</div>
+<h1>Open in Safari</h1>
+<p>Tap the button below to view the full site in Safari</p>
+<a href="/?browser=1" target="_blank" rel="noopener" class="btn" onclick="setTimeout(function(){window.location.href='/?browser=1'},500)">Open in Safari</a>
+<p class="alt">Or <a href="/?browser=1">continue here</a></p>
+</div>
 </body></html>`);
 });
 
