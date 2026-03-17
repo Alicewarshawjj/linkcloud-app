@@ -129,7 +129,7 @@
 
     // Render the data
     function renderData(data) {
-      const { total, byCountry, byDevice, byOS, byBrowser, topLinks, recent } = data;
+      const { total, byCountry, byDevice, byOS, byBrowser, bySource, topLinks, recent } = data;
 
       let html = `
         <div class="grid">
@@ -137,6 +137,12 @@
             <h2>Total Clicks</h2>
             <div class="big-number">${total || 0}</div>
           </div>
+        </div>
+
+        <div class="card" style="margin-bottom:20px;">
+          <h2>📍 By Traffic Source</h2>
+          <p style="color:#666;font-size:12px;margin-bottom:12px;">Use ?src=NAME in your links (e.g., cmehere.net?src=ig1)</p>
+          ${renderSourceList(bySource)}
         </div>
 
         <div class="grid">
@@ -192,6 +198,37 @@
       }).join('');
     }
 
+    // Render traffic sources with icons
+    function renderSourceList(sources) {
+      if (!sources || sources.length === 0) {
+        return '<div style="color:#666;padding:10px;">No sources yet. Add ?src=NAME to your links!</div>';
+      }
+
+      const getSourceIcon = (src) => {
+        if (!src) return '📊';
+        src = src.toLowerCase();
+        if (src.includes('ig') || src.includes('instagram')) return '📸';
+        if (src.includes('twitter') || src.includes('tw') || src.includes('x-')) return '🐦';
+        if (src.includes('tiktok') || src.includes('tt')) return '🎵';
+        if (src.includes('snap')) return '👻';
+        if (src.includes('fb') || src.includes('facebook')) return '📘';
+        if (src.includes('yt') || src.includes('youtube')) return '📺';
+        if (src.includes('email') || src.includes('mail')) return '📧';
+        if (src.includes('whatsapp') || src.includes('wa')) return '💬';
+        return '🔗';
+      };
+
+      return sources.map(item => `
+        <div class="list-item">
+          <span class="list-name">
+            <span style="font-size:18px;margin-right:8px;">${getSourceIcon(item.source)}</span>
+            ${item.source}
+          </span>
+          <span class="list-count">${item.clicks}</span>
+        </div>
+      `).join('');
+    }
+
     // Render recent clicks table
     function renderRecentTable(recent) {
       if (!recent || recent.length === 0) {
@@ -200,6 +237,7 @@
       const rows = recent.map(r => `
         <tr>
           <td>${r.link_title || 'Link'}</td>
+          <td>${r.source ? '<span style="color:#667eea;font-size:12px;">' + r.source + '</span>' : '-'}</td>
           <td>${getFlag(r.country_code)} ${r.country || 'Unknown'}</td>
           <td>${r.device || '-'}</td>
           <td style="color:#888;">${formatTime(r.clicked_at)}</td>
@@ -208,7 +246,7 @@
 
       return `
         <table class="recent-table">
-          <thead><tr><th>Link</th><th>Location</th><th>Device</th><th>Time</th></tr></thead>
+          <thead><tr><th>Link</th><th>Source</th><th>Location</th><th>Device</th><th>Time</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       `;

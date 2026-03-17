@@ -73,6 +73,7 @@ async function initDB() {
       CREATE TABLE IF NOT EXISTS analytics (
         id SERIAL PRIMARY KEY,
         slug VARCHAR(100) NOT NULL DEFAULT 'main',
+        source VARCHAR(50),
         link_type VARCHAR(50) NOT NULL,
         link_id VARCHAR(100),
         link_url TEXT,
@@ -92,6 +93,7 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_analytics_slug ON analytics(slug);
       CREATE INDEX IF NOT EXISTS idx_analytics_clicked_at ON analytics(clicked_at DESC);
       CREATE INDEX IF NOT EXISTS idx_analytics_link_type ON analytics(link_type);
+      CREATE INDEX IF NOT EXISTS idx_analytics_source ON analytics(source);
     `);
 
     // Run migrations for existing databases - add missing columns
@@ -102,7 +104,8 @@ async function initDB() {
       'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS browser VARCHAR(50)',
       'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS device VARCHAR(20)',
       'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS link_title TEXT',
-      'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS link_id VARCHAR(100)'
+      'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS link_id VARCHAR(100)',
+      'ALTER TABLE analytics ADD COLUMN IF NOT EXISTS source VARCHAR(50)'
     ];
 
     for (const migration of migrations) {
@@ -856,11 +859,21 @@ app.get('/api/analytics/stats', requireAuth, async (req, res) => {
 
     // Recent clicks (last 20) - no link_url for security
     const recentResult = await pool.query(
-      `SELECT link_title, link_type, country, country_code, os, browser, device, clicked_at
+      `SELECT link_title, link_type, source, country, country_code, os, browser, device, clicked_at
        FROM analytics
        WHERE slug = 'main'
        ORDER BY clicked_at DESC
        LIMIT 20`
+    );
+
+    // By Source (traffic sources like ig1, twitter1, etc.)
+    const bySourceResult = await pool.query(
+      `SELECT source, COUNT(*) as clicks
+       FROM analytics
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '1 day' * $1 AND source IS NOT NULL AND source != ''
+       GROUP BY source
+       ORDER BY clicks DESC`,
+      [d]
     );
 
     res.json({
@@ -872,6 +885,7 @@ app.get('/api/analytics/stats', requireAuth, async (req, res) => {
       byOS: byOSResult.rows,
       byBrowser: byBrowserResult.rows,
       byDevice: byDeviceResult.rows,
+      bySource: bySourceResult.rows,
       recent: recentResult.rows
     });
   } catch (e) {
@@ -1049,8 +1063,10 @@ app.get('/special-offer', (req, res) => {
 app.get('/go/:encodedLink', async (req, res) => {
   try {
     const { encodedLink } = req.params;
-    const { t: linkType, n: linkTitle } = req.query;
+    const { t: linkType, n: linkTitle, s: source } = req.query;
     const user_agent = (req.headers['user-agent'] || '').slice(0, 500);
+    // Sanitize source - only allow alphanumeric, dash, underscore
+    const safeSource = (source || '').slice(0, 50).replace(/[^a-zA-Z0-9_-]/g, '') || null;
 
     // ══════════════════════════════════════════════════════════════════
     // CRITICAL: Bot Detection - Never reveal URLs to crawlers/bots
@@ -1095,9 +1111,9 @@ app.get('/go/:encodedLink', async (req, res) => {
     // SECURITY: Only store opaque ID (hash of encrypted link), NOT the actual URL
     const linkId = crypto.createHash('sha256').update(encodedLink).digest('hex').slice(0, 16);
     await pool.query(
-      `INSERT INTO analytics (slug, link_type, link_id, link_title, user_agent, ip_address, country, country_code, os, browser, device, referrer)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      ['main', safeType, linkId, safeTitle, user_agent, geoInfo.ip, geoInfo.country, geoInfo.countryCode, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
+      `INSERT INTO analytics (slug, source, link_type, link_id, link_title, user_agent, ip_address, country, country_code, os, browser, device, referrer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      ['main', safeSource, safeType, linkId, safeTitle, user_agent, geoInfo.ip, geoInfo.country, geoInfo.countryCode, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
     );
 
     // ══════════════════════════════════════════════════════════════════
@@ -1207,10 +1223,13 @@ app.get('/', async (req, res) => {
     const seo = result.rows[0].seo || {};
     const userAgent = req.headers['user-agent'] || '';
 
+    // Get traffic source from URL param (e.g., ?src=ig1)
+    const source = (req.query.src || '').slice(0, 50).replace(/[^a-zA-Z0-9_-]/g, '') || null;
+
     // Bot detection
     const isBotRequest = isBot(userAgent, req);
 
-    res.send(renderProfilePage(data, seo, isBotRequest));
+    res.send(renderProfilePage(data, seo, isBotRequest, source));
   } catch (e) {
     console.error('Render error:', e);
     res.status(500).send('Server error');
@@ -1218,7 +1237,7 @@ app.get('/', async (req, res) => {
 });
 
 // ═══ PROFILE RENDERER (Link Protection) ═══
-function renderProfilePage(data, seo = {}, isBotRequest = false) {
+function renderProfilePage(data, seo = {}, isBotRequest = false, source = null) {
   const p = data.profile || {};
   const socials = data.socials || [];
   const feats = data.featured || data.feats || [];  // Support both 'featured' and 'feats'
@@ -1261,8 +1280,9 @@ function renderProfilePage(data, seo = {}, isBotRequest = false) {
   const buildRedirectUrl = (url, type, title) => {
     if (!url) return null;
     const encrypted = encodeLink(url);
-    // Pass type and title as query params for analytics (not sensitive)
+    // Pass type, title, and source as query params for analytics (not sensitive)
     const params = new URLSearchParams({ t: type, n: title || '' });
+    if (source) params.set('s', source);  // Add traffic source if present
     return `/go/${encrypted}?${params.toString()}`;
   };
 
