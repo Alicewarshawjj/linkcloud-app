@@ -1271,6 +1271,9 @@ app.get('/', async (req, res) => {
     // Bot detection
     const isBotRequest = isBot(userAgent, req);
 
+    // Debug: Log User-Agent to find Twitter iOS pattern
+    console.log('📱 UA:', userAgent.substring(0, 200));
+
     res.send(renderProfilePage(data, seo, isBotRequest, null));
   } catch (e) {
     console.error('Render error:', e);
