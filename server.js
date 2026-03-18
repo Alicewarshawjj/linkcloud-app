@@ -1518,11 +1518,22 @@ a{color:#fff;margin-top:20px}
   var url='https://'+location.hostname+'/?browser=1';
   var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
   var isAndroid=/Android/i.test(navigator.userAgent);
+
+  function uuid(){
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){
+      var r=Math.random()*16|0,v=c=='x'?r:(r&0x3|0x8);
+      return v.toString(16);
+    });
+  }
+
   if(isIOS){
-    // Safari FIRST (user likely logged into OnlyFans in Safari)
-    setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},100);
-    // Chrome as fallback
-    setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},300);
+    // METHOD 1: Shortcuts fallback (most reliable for Safari)
+    var shortcutsUrl='shortcuts://x-callback-url/run-shortcut?name='+uuid()+'&x-error='+encodeURIComponent(url);
+    setTimeout(function(){location.href=shortcutsUrl},100);
+    // METHOD 2: x-safari-https as backup
+    setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},800);
+    // METHOD 3: Chrome as last resort
+    setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},1500);
   }else if(isAndroid){
     location.href='intent://'+location.hostname+'/?browser=1#Intent;scheme=https;package=com.android.chrome;end';
   }else{
@@ -1558,11 +1569,22 @@ a{color:#fff;margin-top:20px}
   var url='https://'+location.hostname+'/?browser=1';
   var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
   var isAndroid=/Android/i.test(navigator.userAgent);
+
+  function uuid(){
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){
+      var r=Math.random()*16|0,v=c=='x'?r:(r&0x3|0x8);
+      return v.toString(16);
+    });
+  }
+
   if(isIOS){
-    // Safari FIRST (user likely logged into OnlyFans in Safari)
-    setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},100);
-    // Chrome as fallback
-    setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},300);
+    // METHOD 1: Shortcuts fallback (most reliable for Safari)
+    var shortcutsUrl='shortcuts://x-callback-url/run-shortcut?name='+uuid()+'&x-error='+encodeURIComponent(url);
+    setTimeout(function(){location.href=shortcutsUrl},100);
+    // METHOD 2: x-safari-https as backup
+    setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},800);
+    // METHOD 3: Chrome as last resort
+    setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},1500);
   }else if(isAndroid){
     location.href='intent://'+location.hostname+'/?browser=1#Intent;scheme=https;package=com.android.chrome;end';
   }else{
@@ -1623,13 +1645,27 @@ ${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="sp
   var delay=${delay};
   var isSnapchat=${isSnapchat};
 
+  // Generate random UUID for Shortcuts fallback
+  function uuid(){
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){
+      var r=Math.random()*16|0,v=c=='x'?r:(r&0x3|0x8);
+      return v.toString(16);
+    });
+  }
+
   function doEscape(){
-    document.getElementById('status').textContent='Opening in browser...';
+    document.getElementById('status').textContent='Opening in Safari...';
     if(isIOS){
-      // Safari FIRST (user likely logged into OnlyFans in Safari)
-      setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},100);
-      // Chrome as fallback
-      setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},300);
+      // METHOD 1: Shortcuts fallback (most reliable for Safari)
+      // Opens Shortcuts app briefly, fails to find shortcut, opens x-error URL in Safari
+      var shortcutsUrl='shortcuts://x-callback-url/run-shortcut?name='+uuid()+'&x-error='+encodeURIComponent(url);
+      setTimeout(function(){location.href=shortcutsUrl},100);
+
+      // METHOD 2: x-safari-https scheme (iOS 17+) as backup
+      setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},800);
+
+      // METHOD 3: Chrome as last resort
+      setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},1500);
     }else if(isAndroid){
       location.href='intent://'+location.hostname+'/'+source+'?browser=1#Intent;scheme=https;package=com.android.chrome;end';
     }else{
