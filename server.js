@@ -1586,7 +1586,13 @@ const SOURCE_PLATFORM_MAP = {
 };
 
 // Auto-open escape page generator (works for Reddit, Threads, Snapchat, etc.)
-function generateAutoOpenPage(source) {
+// Snapchat needs delay to allow "Attach to Snap" button to appear
+function generateAutoOpenPage(source, platform) {
+  // Snapchat needs 3 second delay before escape attempt
+  const isSnapchat = platform === 'snapchat';
+  const delay = isSnapchat ? 3000 : 100;
+  const delayText = isSnapchat ? 'Waiting for Snapchat...' : 'Opening in browser...';
+
   return `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
@@ -1598,10 +1604,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-d
 @keyframes spin{to{transform:rotate(360deg)}}
 p{margin-top:20px;opacity:0.7}
 a{color:#fff;margin-top:20px}
+.countdown{font-size:24px;margin-bottom:10px;font-weight:bold}
 </style>
 </head><body>
-<div class="spinner"></div>
-<p>Opening in browser...</p>
+${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="spinner"></div>'}
+<p id="status">${delayText}</p>
 <a href="/${source}?browser=1">Tap here if nothing happens</a>
 <script>
 (function(){
@@ -1609,13 +1616,38 @@ a{color:#fff;margin-top:20px}
   var url='https://'+location.hostname+'/'+source+'?browser=1';
   var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
   var isAndroid=/Android/i.test(navigator.userAgent);
-  if(isIOS){
-    setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},100);
-    setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},200);
-  }else if(isAndroid){
-    location.href='intent://'+location.hostname+'/'+source+'?browser=1#Intent;scheme=https;package=com.android.chrome;end';
+  var delay=${delay};
+  var isSnapchat=${isSnapchat};
+
+  function doEscape(){
+    document.getElementById('status').textContent='Opening in browser...';
+    if(isIOS){
+      setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},100);
+      setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},200);
+    }else if(isAndroid){
+      location.href='intent://'+location.hostname+'/'+source+'?browser=1#Intent;scheme=https;package=com.android.chrome;end';
+    }else{
+      location.href=url;
+    }
+  }
+
+  if(isSnapchat){
+    // Countdown for Snapchat - give time to tap "Attach to Snap"
+    var count=3;
+    var countdown=document.getElementById('countdown');
+    var interval=setInterval(function(){
+      count--;
+      if(count>0){
+        countdown.textContent=count;
+      }else{
+        clearInterval(interval);
+        countdown.textContent='🚀';
+        doEscape();
+      }
+    },1000);
   }else{
-    location.href=url;
+    // Immediate escape for other platforms
+    doEscape();
   }
 })();
 </script>
@@ -1646,7 +1678,7 @@ app.get('/:source', async (req, res, next) => {
     // Continue to render normal page below
   } else if (platform) {
     // This source needs auto-open escape - show escape page
-    return res.send(generateAutoOpenPage(cleanSource));
+    return res.send(generateAutoOpenPage(cleanSource, platform));
   }
 
   try {
