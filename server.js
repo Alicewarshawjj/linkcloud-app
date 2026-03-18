@@ -1519,8 +1519,10 @@ a{color:#fff;margin-top:20px}
   var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
   var isAndroid=/Android/i.test(navigator.userAgent);
   if(isIOS){
-    setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},100);
-    setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},200);
+    // Safari FIRST (user likely logged into OnlyFans in Safari)
+    setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},100);
+    // Chrome as fallback
+    setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},300);
   }else if(isAndroid){
     location.href='intent://'+location.hostname+'/?browser=1#Intent;scheme=https;package=com.android.chrome;end';
   }else{
@@ -1557,8 +1559,10 @@ a{color:#fff;margin-top:20px}
   var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
   var isAndroid=/Android/i.test(navigator.userAgent);
   if(isIOS){
-    setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},100);
-    setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},200);
+    // Safari FIRST (user likely logged into OnlyFans in Safari)
+    setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},100);
+    // Chrome as fallback
+    setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},300);
   }else if(isAndroid){
     location.href='intent://'+location.hostname+'/?browser=1#Intent;scheme=https;package=com.android.chrome;end';
   }else{
@@ -1622,8 +1626,10 @@ ${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="sp
   function doEscape(){
     document.getElementById('status').textContent='Opening in browser...';
     if(isIOS){
-      setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},100);
-      setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},200);
+      // Safari FIRST (user likely logged into OnlyFans in Safari)
+      setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},100);
+      // Chrome as fallback
+      setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},300);
     }else if(isAndroid){
       location.href='intent://'+location.hostname+'/'+source+'?browser=1#Intent;scheme=https;package=com.android.chrome;end';
     }else{
