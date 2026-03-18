@@ -1584,14 +1584,108 @@ const SOURCE_PLATFORM_MAP = {
   // Snapchat sources - use auto-open escape
   'seemoresc': 'snapchat',
   'sc': 'snapchat',
-  // Facebook sources - use auto-open escape
+  // Facebook sources - use Universal Link strategy
   'fb': 'facebook',
+  'seemoref': 'facebook',
   'seemorefb': 'facebook'
 };
+
+// Facebook-specific escape page using Universal Links strategy
+// This tries to trigger iOS "Open in App?" dialog by redirecting to a Universal Link
+function generateFacebookEscapePage(source) {
+  return `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Continue</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#000;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.container{text-align:center;padding:24px;max-width:340px}
+.icon{font-size:48px;margin-bottom:16px}
+h1{font-size:22px;margin-bottom:12px;font-weight:600}
+p{color:#888;font-size:15px;line-height:1.5;margin-bottom:24px}
+.btn{display:block;width:100%;padding:16px 24px;background:#0095f6;color:#fff;text-decoration:none;border-radius:12px;font-size:17px;font-weight:600;margin-bottom:12px;-webkit-tap-highlight-color:transparent}
+.btn:active{opacity:0.8;transform:scale(0.98)}
+.btn-secondary{background:#262626;color:#fff}
+.btn-copy{background:transparent;border:1px solid #333;color:#888;font-size:14px;padding:12px}
+.note{margin-top:20px;padding:16px;background:#111;border-radius:12px;text-align:left}
+.note-title{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.note-text{font-size:13px;color:#888;line-height:1.6}
+</style>
+</head><body>
+<div class="container">
+  <div class="icon">🔗</div>
+  <h1>Open Link</h1>
+  <p>Facebook's browser blocks automatic opening. Tap below to continue.</p>
+
+  <a class="btn" href="#" id="openBtn">Open Link ↗</a>
+  <a class="btn btn-secondary" href="https://cmehere.net/${source}?browser=1" target="_blank" rel="noopener">Try Direct Link</a>
+  <button class="btn btn-copy" id="copyBtn">Copy Link</button>
+
+  <div class="note">
+    <div class="note-title">Alternative</div>
+    <div class="note-text">
+      Tap <b>⋯</b> at bottom right, then <b>"Open in Browser"</b>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var targetUrl='https://cmehere.net/${source}?browser=1';
+  var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var isAndroid=/Android/i.test(navigator.userAgent);
+
+  document.getElementById('openBtn').onclick=function(e){
+    e.preventDefault();
+
+    if(isAndroid){
+      // Android: intent scheme works
+      location.href='intent://cmehere.net/${source}?browser=1#Intent;scheme=https;end';
+      return;
+    }
+
+    if(isIOS){
+      // iOS: Try multiple methods in sequence
+      // Method 1: Direct link (might trigger Universal Link if destination supports it)
+      var w=window.open(targetUrl,'_blank');
+      if(!w||w.closed){
+        // Method 2: x-safari-https
+        setTimeout(function(){
+          location.href='x-safari-https://cmehere.net/${source}?browser=1';
+        },100);
+      }
+      // Method 3: location.href as final fallback
+      setTimeout(function(){
+        location.href=targetUrl;
+      },500);
+    }else{
+      location.href=targetUrl;
+    }
+  };
+
+  document.getElementById('copyBtn').onclick=function(){
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(targetUrl).then(function(){
+        document.getElementById('copyBtn').textContent='✓ Copied! Paste in Safari';
+      });
+    }else{
+      prompt('Copy this link:',targetUrl);
+    }
+  };
+})();
+</script>
+</body></html>`;
+}
 
 // Auto-open escape page generator (works for Reddit, Threads, Snapchat, etc.)
 // Snapchat needs delay to allow "Attach to Snap" button to appear
 function generateAutoOpenPage(source, platform) {
+  // Facebook uses different strategy
+  if (platform === 'facebook') {
+    return generateFacebookEscapePage(source);
+  }
+
   // Snapchat needs 3 second delay before escape attempt
   const isSnapchat = platform === 'snapchat';
   const delay = isSnapchat ? 3000 : 100;
