@@ -1910,7 +1910,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   ${p.avatarUrl ? `<meta name="twitter:image" content="${esc(p.avatarUrl)}">` : ''}
   <link rel="icon" href="/favicon.ico">
   <script id="early-deeplink-detect">
-  (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';var ref=document.referrer||'';window.__IS_THREADS__=ua.indexOf('Threads')!==-1||ua.indexOf('Barcelona')!==-1||ref.indexOf('threads.net')!==-1;window.__IS_TWITTER__=ua.indexOf('Twitter')!==-1||ua.indexOf('TwitterAndroid')!==-1||ref.indexOf('t.co')!==-1||ref.indexOf('twitter.com')!==-1||ref.indexOf('x.com')!==-1;window.__IS_INAPP__=!window.__IS_THREADS__&&!window.__IS_TWITTER__&&(ua.indexOf('Instagram')!==-1||ua.indexOf('FBAN')!==-1||ua.indexOf('FBAV')!==-1||ua.indexOf('TikTok')!==-1||ua.indexOf('LinkedInApp')!==-1);window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua);if(window.__IS_THREADS__){try{var url=new URL(window.location.href);if(!url.searchParams.has('browser')){url.searchParams.set('browser','1');history.replaceState(null,'',url.toString())}}catch(e){}}if(window.__IS_TWITTER__){try{var url=new URL(window.location.href);url.searchParams.set('browser','1');var full=url.toString();var stripped=full.replace(/^https?:\/\//,'');if(window.__IS_IOS__){window.location.href='x-safari-https://'+stripped}else if(window.__IS_ANDROID__){window.location.href='intent://'+url.hostname+url.pathname+url.search+'#Intent;scheme=https;package=com.android.chrome;end'}}catch(e){}}}catch(e){}})();
+  (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';var ref=document.referrer||'';window.__IS_THREADS__=ua.indexOf('Threads')!==-1||ua.indexOf('Barcelona')!==-1||ref.indexOf('threads.net')!==-1;window.__IS_TWITTER__=ua.indexOf('Twitter')!==-1||ua.indexOf('TwitterAndroid')!==-1||ref.indexOf('t.co')!==-1||ref.indexOf('twitter.com')!==-1||ref.indexOf('x.com')!==-1;window.__IS_INAPP__=!window.__IS_THREADS__&&!window.__IS_TWITTER__&&(ua.indexOf('Instagram')!==-1||ua.indexOf('FBAN')!==-1||ua.indexOf('FBAV')!==-1||ua.indexOf('TikTok')!==-1||ua.indexOf('LinkedInApp')!==-1);window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua);if(window.__IS_THREADS__){try{var url=new URL(window.location.href);if(!url.searchParams.has('browser')){url.searchParams.set('browser','1');history.replaceState(null,'',url.toString())}}catch(e){}}}catch(e){}})();
   </script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
@@ -2076,6 +2076,27 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
           overlay.classList.add('active');
         }
       },true);
+    })();
+
+    // Twitter/X: Auto-escape after page loads (shows landing page briefly, then triggers "Open in Safari?")
+    (function(){
+      if(!window.__IS_TWITTER__)return;
+
+      // Wait for page to render, then trigger browser escape
+      setTimeout(function(){
+        try{
+          var url=new URL(window.location.href);
+          url.searchParams.set('browser','1');
+          var full=url.toString();
+          var stripped=full.replace(/^https?:\\/\\//,'');
+
+          if(window.__IS_IOS__){
+            window.location.href='x-safari-https://'+stripped;
+          }else if(window.__IS_ANDROID__){
+            window.location.href='intent://'+url.hostname+url.pathname+url.search+'#Intent;scheme=https;package=com.android.chrome;end';
+          }
+        }catch(e){}
+      },500);
     })();
   </script>
 </body>
