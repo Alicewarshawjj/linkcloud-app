@@ -1938,214 +1938,1135 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
 app.get('/debug', (req, res) => {
   const ua = req.headers['user-agent'] || '';
   const allHeaders = JSON.stringify(req.headers, null, 2);
+  const clientIP = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.ip;
+  const timestamp = new Date().toISOString();
+  const requestId = Math.random().toString(36).substring(2, 10);
 
   res.send(`<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Debug Info</title>
+<title>🔬 ULTRA DEBUG v2.0</title>
 <style>
-*{box-sizing:border-box}
-body{font-family:monospace;background:#000;color:#0f0;padding:15px;font-size:12px;line-height:1.4}
-h2{color:#0ff;border-bottom:1px solid #0ff;padding-bottom:5px;margin-top:20px}
-.section{background:#111;padding:10px;margin:10px 0;border-radius:5px;word-break:break-all}
-.warn{color:#ff0}
-.error{color:#f00}
-.ok{color:#0f0}
-pre{white-space:pre-wrap;margin:0}
-button{background:#0f0;color:#000;border:none;padding:10px 20px;margin:5px;font-size:14px;cursor:pointer;border-radius:5px}
-#results{margin-top:20px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'SF Mono',Monaco,monospace;background:#0a0a0f;color:#00ff88;padding:10px;font-size:11px;line-height:1.3}
+h1{color:#ff00ff;text-align:center;font-size:18px;margin:10px 0;text-shadow:0 0 10px #ff00ff}
+h2{color:#00ffff;border-bottom:1px solid #00ffff;padding:5px 0;margin:15px 0 8px;font-size:13px}
+h3{color:#ffff00;margin:10px 0 5px;font-size:12px}
+.section{background:#111118;padding:8px;margin:5px 0;border-radius:4px;border:1px solid #222;word-break:break-all}
+.warn{color:#ffff00}
+.error{color:#ff4444}
+.ok{color:#00ff88}
+.critical{color:#ff00ff;font-weight:bold}
+.highlight{background:#333;padding:2px 5px;border-radius:3px}
+pre{white-space:pre-wrap;margin:0;font-size:10px}
+button{background:linear-gradient(135deg,#00ff88,#00aa55);color:#000;border:none;padding:8px 12px;margin:3px;font-size:11px;cursor:pointer;border-radius:4px;font-weight:bold}
+button:active{transform:scale(0.95)}
+button.danger{background:linear-gradient(135deg,#ff4444,#aa0000);color:#fff}
+button.test{background:linear-gradient(135deg,#00ffff,#0088aa);color:#000}
+button.scheme{background:linear-gradient(135deg,#ff00ff,#8800aa);color:#fff}
+#log{background:#000;border:2px solid #333;padding:8px;margin:10px 0;max-height:300px;overflow-y:auto;border-radius:4px}
+.log-entry{padding:3px 0;border-bottom:1px solid #222;font-size:10px}
+.log-time{color:#666}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:5px}
+.counter{font-size:24px;color:#ff00ff;text-align:center}
+.tab-container{display:flex;flex-wrap:wrap;gap:3px;margin:10px 0}
+.tab{padding:8px 12px;background:#222;color:#888;cursor:pointer;border-radius:4px 4px 0 0;font-size:11px}
+.tab.active{background:#333;color:#00ff88}
+.tab-content{display:none;background:#111;padding:10px;border-radius:0 4px 4px 4px}
+.tab-content.active{display:block}
+.progress{height:4px;background:#222;border-radius:2px;overflow:hidden;margin:5px 0}
+.progress-bar{height:100%;background:linear-gradient(90deg,#00ff88,#00ffff);transition:width 0.3s}
+.badge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:9px;margin:2px}
+.badge-ok{background:#00ff8833;color:#00ff88}
+.badge-warn{background:#ffff0033;color:#ffff00}
+.badge-error{background:#ff444433;color:#ff4444}
 </style>
 </head><body>
-<h1>🔍 Instagram Browser Debug</h1>
-<p>Timestamp: ${new Date().toISOString()}</p>
-
-<h2>📱 Server-Side Detection</h2>
-<div class="section">
-<b>User-Agent:</b><br>${ua}<br><br>
-<b>Instagram detected:</b> <span class="${/Instagram|FBAN|FB_IAB/.test(ua) ? 'ok' : 'warn'}">${/Instagram|FBAN|FB_IAB/.test(ua)}</span><br>
-<b>iOS detected:</b> ${/iPhone|iPad|iPod/.test(ua)}<br>
-<b>Android detected:</b> ${/Android/.test(ua)}<br>
+<h1>🔬 ULTRA DEBUG v2.0</h1>
+<div style="text-align:center;color:#666;margin-bottom:15px">
+Request ID: <span class="highlight">${requestId}</span> | ${timestamp}
 </div>
 
-<h2>📋 All Request Headers</h2>
-<div class="section"><pre>${allHeaders}</pre></div>
+<!-- TAB NAVIGATION -->
+<div class="tab-container">
+<div class="tab active" onclick="showTab('basic')">📱 Basic</div>
+<div class="tab" onclick="showTab('deep')">🔍 Deep</div>
+<div class="tab" onclick="showTab('schemes')">🚀 Schemes</div>
+<div class="tab" onclick="showTab('timing')">⏱️ Timing</div>
+<div class="tab" onclick="showTab('native')">🔗 Native</div>
+<div class="tab" onclick="showTab('advanced')">⚡ Advanced</div>
+<div class="tab" onclick="showTab('fingerprint')">🔐 Fingerprint</div>
+</div>
 
-<h2>🖥️ Client-Side Detection</h2>
+<!-- TAB: BASIC -->
+<div id="tab-basic" class="tab-content active">
+<h2>📱 Server Detection</h2>
+<div class="section">
+<b>User-Agent:</b><br><span style="color:#888">${ua}</span><br><br>
+<b>Instagram:</b> <span class="${/Instagram|FBAN|FB_IAB/.test(ua) ? 'ok' : 'warn'}">${/Instagram|FBAN|FB_IAB/.test(ua)}</span> |
+<b>iOS:</b> ${/iPhone|iPad|iPod/.test(ua)} |
+<b>Android:</b> ${/Android/.test(ua)}<br>
+<b>Client IP:</b> ${clientIP}<br>
+<b>Request ID:</b> ${requestId}
+</div>
+
+<h2>📋 Headers</h2>
+<div class="section"><pre style="max-height:150px;overflow:auto">${allHeaders}</pre></div>
+
+<h2>🖥️ Client Detection</h2>
 <div class="section" id="client-info">Loading...</div>
+</div>
 
-<h2>🔐 WebKit & Security</h2>
+<!-- TAB: DEEP -->
+<div id="tab-deep" class="tab-content">
+<h2>🔐 WebKit & Native Bridges</h2>
 <div class="section" id="webkit-info">Loading...</div>
 
-<h2>🚀 Escape Capability Tests</h2>
-<div class="section" id="escape-tests">
-<button onclick="testLocationHref()">Test location.href</button>
-<button onclick="testWindowOpen()">Test window.open</button>
-<button onclick="testAnchorClick()">Test anchor click</button>
-<button onclick="testAllSchemes()">Test All Schemes</button>
-</div>
-<div id="results"></div>
+<h2>🌐 Window Properties</h2>
+<div class="section" id="window-props">Loading...</div>
 
-<h2>📊 Feature Detection</h2>
-<div class="section" id="features">Loading...</div>
+<h2>📊 Performance API</h2>
+<div class="section" id="perf-info">Loading...</div>
+
+<h2>🔒 Security Context</h2>
+<div class="section" id="security-info">Loading...</div>
+</div>
+
+<!-- TAB: SCHEMES -->
+<div id="tab-schemes" class="tab-content">
+<h2>🚀 URL Scheme Tests</h2>
+<p style="color:#888;margin-bottom:10px">Click each button to test if the scheme can escape the in-app browser:</p>
+
+<h3>Safari Schemes</h3>
+<div class="grid">
+<button class="scheme" onclick="testScheme('x-safari-https://cmehere.net/debug?t=1')">x-safari-https</button>
+<button class="scheme" onclick="testScheme('x-safari-http://cmehere.net/debug?t=1')">x-safari-http</button>
+<button class="scheme" onclick="testScheme('x-web-search://?cmehere.net')">x-web-search</button>
+</div>
+
+<h3>Chrome Schemes</h3>
+<div class="grid">
+<button class="scheme" onclick="testScheme('googlechrome://cmehere.net/debug?t=1')">googlechrome</button>
+<button class="scheme" onclick="testScheme('googlechromes://cmehere.net/debug?t=1')">googlechromes</button>
+<button class="scheme" onclick="testScheme('googlechrome-x-callback://x-callback-url/open/?url=https://cmehere.net')">chrome-callback</button>
+</div>
+
+<h3>Other Browser Schemes</h3>
+<div class="grid">
+<button class="scheme" onclick="testScheme('firefox://open-url?url=https://cmehere.net')">firefox</button>
+<button class="scheme" onclick="testScheme('brave://open-url?url=https://cmehere.net')">brave</button>
+<button class="scheme" onclick="testScheme('opera-http://cmehere.net')">opera</button>
+<button class="scheme" onclick="testScheme('dolphin://cmehere.net')">dolphin</button>
+</div>
+
+<h3>System Schemes</h3>
+<div class="grid">
+<button class="scheme" onclick="testScheme('tel:+1234567890')">tel:</button>
+<button class="scheme" onclick="testScheme('mailto:test@test.com')">mailto:</button>
+<button class="scheme" onclick="testScheme('sms:+1234567890')">sms:</button>
+<button class="scheme" onclick="testScheme('maps://?q=test')">maps:</button>
+<button class="scheme" onclick="testScheme('shortcuts://run-shortcut?name=test')">shortcuts:</button>
+</div>
+
+<h3>Intent & Universal Links</h3>
+<div class="grid">
+<button class="scheme" onclick="testScheme('intent://cmehere.net#Intent;scheme=https;package=com.android.chrome;end')">intent://</button>
+<button class="scheme" onclick="testUniversalLink()">Universal Link</button>
+<button class="scheme" onclick="testScheme('https://cmehere.net/.well-known/apple-app-site-association')">AASA Check</button>
+</div>
+
+<h3>Direct HTTPS Tests</h3>
+<div class="grid">
+<button class="test" onclick="testScheme('https://cmehere.net/debug?direct=1')">HTTPS Direct</button>
+<button class="test" onclick="testScheme('https://www.google.com')">Google</button>
+<button class="test" onclick="testScheme('https://apple.com')">Apple</button>
+</div>
+
+<div id="scheme-results" style="margin-top:15px"></div>
+</div>
+
+<!-- TAB: TIMING -->
+<div id="tab-timing" class="tab-content">
+<h2>⏱️ Timing Analysis</h2>
+<p style="color:#888;margin-bottom:10px">Test escape with different timing patterns:</p>
+
+<h3>Delay Tests</h3>
+<div class="grid">
+<button class="test" onclick="testTiming(0)">0ms (Instant)</button>
+<button class="test" onclick="testTiming(50)">50ms</button>
+<button class="test" onclick="testTiming(100)">100ms</button>
+<button class="test" onclick="testTiming(200)">200ms</button>
+<button class="test" onclick="testTiming(300)">300ms</button>
+<button class="test" onclick="testTiming(500)">500ms</button>
+<button class="test" onclick="testTiming(1000)">1000ms</button>
+<button class="test" onclick="testTiming(2000)">2000ms</button>
+</div>
+
+<h3>Multi-Attempt Patterns</h3>
+<div class="grid">
+<button class="test" onclick="testMultiAttempt('rapid')">Rapid Fire (3x50ms)</button>
+<button class="test" onclick="testMultiAttempt('staggered')">Staggered (100,300,500)</button>
+<button class="test" onclick="testMultiAttempt('exponential')">Exponential (100,200,400)</button>
+<button class="test" onclick="testMultiAttempt('juicy')">Juicy.bio Pattern</button>
+</div>
+
+<h3>Event-Based Timing</h3>
+<div class="grid">
+<button class="test" onclick="testAfterLoad()">After Load Event</button>
+<button class="test" onclick="testAfterRAF()">After RAF</button>
+<button class="test" onclick="testAfterIdle()">After requestIdleCallback</button>
+<button class="test" onclick="testAfterMicrotask()">After Microtask</button>
+</div>
+
+<h3>User Gesture Tests</h3>
+<div class="grid">
+<button class="test" onclick="testDoubleClick()" ondblclick="actualDoubleClick()">Double Click Test</button>
+<button class="test" onmousedown="testMouseDown()">MouseDown Test</button>
+<button class="test" ontouchstart="testTouchStart()">TouchStart Test</button>
+</div>
+
+<div id="timing-results" style="margin-top:15px"></div>
+</div>
+
+<!-- TAB: NATIVE -->
+<div id="tab-native" class="tab-content">
+<h2>🔗 Native Bridge Detection</h2>
+<div class="section" id="native-bridges">Loading...</div>
+
+<h2>📱 App Communication</h2>
+<div class="section">
+<h3>PostMessage Tests</h3>
+<div class="grid">
+<button class="test" onclick="testPostMessage('openExternal')">postMessage: openExternal</button>
+<button class="test" onclick="testPostMessage('openInSafari')">postMessage: openInSafari</button>
+<button class="test" onclick="testPostMessage('navigate')">postMessage: navigate</button>
+</div>
+
+<h3>Meta Refresh Tests</h3>
+<div class="grid">
+<button class="test" onclick="testMetaRefresh(0)">Meta Refresh 0s</button>
+<button class="test" onclick="testMetaRefresh(1)">Meta Refresh 1s</button>
+<button class="test" onclick="testMetaRefresh(2)">Meta Refresh 2s</button>
+</div>
+
+<h3>Iframe Escape Tests</h3>
+<div class="grid">
+<button class="test" onclick="testIframeEscape('src')">Iframe src change</button>
+<button class="test" onclick="testIframeEscape('sandbox')">Sandboxed iframe</button>
+<button class="test" onclick="testIframeEscape('srcdoc')">Iframe srcdoc</button>
+</div>
+
+<h3>Form Submit Tests</h3>
+<div class="grid">
+<button class="test" onclick="testFormSubmit('GET')">Form GET</button>
+<button class="test" onclick="testFormSubmit('POST')">Form POST</button>
+<button class="test" onclick="testFormSubmit('target')">Form target=_blank</button>
+</div>
+</div>
+
+<h2>📡 JavaScript Navigation</h2>
+<div class="section">
+<div class="grid">
+<button class="test" onclick="testNavMethod('href')">location.href</button>
+<button class="test" onclick="testNavMethod('assign')">location.assign</button>
+<button class="test" onclick="testNavMethod('replace')">location.replace</button>
+<button class="test" onclick="testNavMethod('open')">window.open</button>
+<button class="test" onclick="testNavMethod('openBlank')">open _blank</button>
+<button class="test" onclick="testNavMethod('openSelf')">open _self</button>
+<button class="test" onclick="testNavMethod('anchor')">Anchor click</button>
+<button class="test" onclick="testNavMethod('anchorDispatch')">Anchor dispatch</button>
+</div>
+</div>
+</div>
+
+<!-- TAB: ADVANCED -->
+<div id="tab-advanced" class="tab-content">
+<h2>⚡ Advanced Techniques</h2>
+
+<h3>Blob URL Tests</h3>
+<div class="section">
+<div class="grid">
+<button class="test" onclick="testBlobRedirect()">Blob URL Redirect</button>
+<button class="test" onclick="testDataUri()">Data URI Redirect</button>
+</div>
+</div>
+
+<h3>Service Worker Tests</h3>
+<div class="section" id="sw-tests">
+<div class="grid">
+<button class="test" onclick="checkServiceWorker()">Check SW Support</button>
+</div>
+</div>
+
+<h3>History API Tests</h3>
+<div class="section">
+<div class="grid">
+<button class="test" onclick="testHistoryPush()">history.pushState</button>
+<button class="test" onclick="testHistoryReplace()">history.replaceState</button>
+<button class="test" onclick="testHistoryBack()">history.back()</button>
+</div>
+</div>
+
+<h3>Document Write Tests</h3>
+<div class="section">
+<div class="grid">
+<button class="test" onclick="testDocWrite()">document.write redirect</button>
+<button class="test" onclick="testDocOpen()">document.open/write/close</button>
+</div>
+</div>
+
+<h3>Script Injection Tests</h3>
+<div class="section">
+<div class="grid">
+<button class="test" onclick="testScriptInject()">Inject redirect script</button>
+<button class="test" onclick="testImgError()">IMG onerror redirect</button>
+</div>
+</div>
+</div>
+
+<!-- TAB: FINGERPRINT -->
+<div id="tab-fingerprint" class="tab-content">
+<h2>🔐 Account Type Fingerprint</h2>
+<p style="color:#888;margin-bottom:10px">Trying to detect differences between large/small accounts:</p>
+
+<div class="section" id="fingerprint-results">
+<button onclick="runFullFingerprint()">🔍 Run Full Fingerprint Analysis</button>
+</div>
+
+<h2>📊 Comparison Data</h2>
+<div class="section" id="comparison-data">
+<p>After running fingerprint on both account types, paste results here for comparison.</p>
+<textarea id="fp-input" style="width:100%;height:100px;background:#000;color:#0f0;border:1px solid #333;font-family:monospace;font-size:10px" placeholder="Paste fingerprint JSON here..."></textarea>
+<button onclick="compareFingerprints()">Compare</button>
+</div>
+
+<h2>🎯 Network Timing</h2>
+<div class="section" id="network-timing">
+<button onclick="runNetworkAnalysis()">📡 Analyze Network Behavior</button>
+</div>
+</div>
+
+<!-- LOG SECTION -->
+<h2>📋 Live Log</h2>
+<div id="log"></div>
+<div class="grid" style="margin-top:10px">
+<button onclick="clearLog()">Clear Log</button>
+<button onclick="copyLog()">Copy Log</button>
+<button onclick="downloadLog()">Download Log</button>
+</div>
 
 <script>
-// Client-side detection
+// ═══════════════════════════════════════════════════════════════
+// ULTRA DEBUG v2.0 - Comprehensive Instagram In-App Browser Analysis
+// ═══════════════════════════════════════════════════════════════
+
+var logData = [];
+var requestId = '${requestId}';
+var testCounter = 0;
+
+// TAB SYSTEM
+function showTab(name){
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector('.tab-content#tab-'+name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// LOGGING SYSTEM
+function log(msg, type, data){
+  type = type || 'info';
+  var colors = {ok:'#00ff88', error:'#ff4444', warn:'#ffff00', info:'#00ffff', critical:'#ff00ff'};
+  var entry = {time: new Date().toISOString(), msg: msg, type: type, data: data, id: ++testCounter};
+  logData.push(entry);
+
+  var logDiv = document.getElementById('log');
+  var color = colors[type] || '#888';
+  var timeStr = new Date().toLocaleTimeString();
+  logDiv.innerHTML = '<div class="log-entry"><span class="log-time">['+timeStr+']</span> <span style="color:'+color+'">['+type.toUpperCase()+']</span> '+msg+'</div>' + logDiv.innerHTML;
+
+  // Send to server for persistence
+  try {
+    navigator.sendBeacon('/debug-log', JSON.stringify(entry));
+  } catch(e){}
+}
+
+function clearLog(){ document.getElementById('log').innerHTML = ''; logData = []; }
+function copyLog(){ navigator.clipboard.writeText(JSON.stringify(logData, null, 2)).then(() => log('Log copied!', 'ok')); }
+function downloadLog(){
+  var blob = new Blob([JSON.stringify(logData, null, 2)], {type: 'application/json'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'debug-log-'+requestId+'.json';
+  a.click();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CLIENT DETECTION
+// ═══════════════════════════════════════════════════════════════
 (function(){
   var ua = navigator.userAgent || '';
-  var vendor = navigator.vendor || '';
-
   var info = '';
-  info += '<b>navigator.userAgent:</b><br>' + ua + '<br><br>';
-  info += '<b>navigator.vendor:</b> ' + vendor + '<br>';
-  info += '<b>navigator.platform:</b> ' + (navigator.platform || 'N/A') + '<br>';
-  info += '<b>navigator.standalone:</b> ' + navigator.standalone + '<br>';
-  info += '<b>window.innerWidth:</b> ' + window.innerWidth + '<br>';
-  info += '<b>window.innerHeight:</b> ' + window.innerHeight + '<br>';
-  info += '<b>window.devicePixelRatio:</b> ' + window.devicePixelRatio + '<br>';
-  info += '<b>document.referrer:</b> ' + (document.referrer || 'none') + '<br>';
 
-  // In-app browser detection
-  var isInstagram = /Instagram|FBAN|FB_IAB|FBAV|FBIOS/.test(ua);
-  var isFacebook = /FBAN|FBAV|FB_IAB/.test(ua) && !/Instagram/.test(ua);
-  var isTikTok = /TikTok|BytedanceWebview/.test(ua);
-  var isTwitter = /Twitter/.test(ua);
+  // Basic info
+  info += '<b>UA:</b> <span style="color:#888;font-size:10px">'+ua+'</span><br><br>';
+  info += '<b>Platform:</b> '+(navigator.platform||'N/A')+' | ';
+  info += '<b>Vendor:</b> '+(navigator.vendor||'N/A')+' | ';
+  info += '<b>Lang:</b> '+navigator.language+'<br>';
+  info += '<b>Screen:</b> '+screen.width+'x'+screen.height+' @ '+window.devicePixelRatio+'x | ';
+  info += '<b>Viewport:</b> '+window.innerWidth+'x'+window.innerHeight+'<br>';
+  info += '<b>Standalone:</b> '+navigator.standalone+' | ';
+  info += '<b>Referrer:</b> '+(document.referrer||'none')+'<br><br>';
 
-  info += '<br><b>Detected as:</b><br>';
-  info += '- Instagram: <span class="' + (isInstagram ? 'ok' : '') + '">' + isInstagram + '</span><br>';
-  info += '- Facebook: ' + isFacebook + '<br>';
-  info += '- TikTok: ' + isTikTok + '<br>';
-  info += '- Twitter: ' + isTwitter + '<br>';
+  // Detection badges
+  var detections = [
+    {name:'Instagram', test:/Instagram|FBAN|FB_IAB|FBAV|FBIOS/.test(ua)},
+    {name:'Facebook', test:/FBAN|FBAV|FB_IAB/.test(ua) && !/Instagram/.test(ua)},
+    {name:'TikTok', test:/TikTok|BytedanceWebview/.test(ua)},
+    {name:'Twitter/X', test:/Twitter/.test(ua)},
+    {name:'Snapchat', test:/Snapchat/.test(ua)},
+    {name:'iOS', test:/iPhone|iPad|iPod/.test(ua)},
+    {name:'Android', test:/Android/.test(ua)},
+    {name:'WebView', test:/wv|WebView/.test(ua)},
+  ];
+
+  info += '<b>Detections:</b> ';
+  detections.forEach(function(d){
+    var cls = d.test ? 'badge-ok' : 'badge-warn';
+    info += '<span class="badge '+cls+'">'+d.name+': '+d.test+'</span> ';
+  });
 
   document.getElementById('client-info').innerHTML = info;
+  log('Client detection complete', 'ok');
 })();
 
-// WebKit detection
+// ═══════════════════════════════════════════════════════════════
+// WEBKIT & NATIVE BRIDGE DETECTION
+// ═══════════════════════════════════════════════════════════════
 (function(){
   var info = '';
-  var hasWebkit = !!(window.webkit);
-  var hasMessageHandlers = !!(window.webkit && window.webkit.messageHandlers);
 
-  info += '<b>window.webkit exists:</b> <span class="' + (hasWebkit ? 'warn' : 'ok') + '">' + hasWebkit + '</span><br>';
-  info += '<b>webkit.messageHandlers exists:</b> <span class="' + (hasMessageHandlers ? 'warn' : 'ok') + '">' + hasMessageHandlers + '</span><br>';
+  // WebKit checks
+  var hasWebkit = !!window.webkit;
+  var hasHandlers = !!(window.webkit && window.webkit.messageHandlers);
 
-  if(hasMessageHandlers){
-    info += '<b>messageHandlers keys:</b> ';
+  info += '<b>window.webkit:</b> <span class="'+(hasWebkit?'warn':'ok')+'">'+hasWebkit+'</span><br>';
+  info += '<b>webkit.messageHandlers:</b> <span class="'+(hasHandlers?'warn':'ok')+'">'+hasHandlers+'</span><br>';
+
+  if(hasHandlers){
     try {
       var keys = Object.keys(window.webkit.messageHandlers);
-      info += keys.length > 0 ? keys.join(', ') : '(empty)';
+      info += '<b>Handler keys:</b> '+(keys.length > 0 ? keys.join(', ') : '(empty)')+'<br>';
     } catch(e) {
-      info += '(cannot enumerate: ' + e.message + ')';
+      info += '<b>Handler keys:</b> (cannot enumerate)';
     }
-    info += '<br>';
   }
 
-  // Check for specific handlers
-  var handlers = ['instagram', 'observe', 'fb', 'fbNavigation', 'openInSafari', 'openExternal'];
-  info += '<br><b>Specific handler checks:</b><br>';
+  // Specific handler checks
+  var handlers = [
+    'instagram', 'observe', 'fb', 'fbNavigation', 'openInSafari',
+    'openExternal', 'openBrowser', 'nativeBridge', 'webViewBridge',
+    'contextualSearch', 'shareSheet', 'copyToClipboard', 'hapticFeedback'
+  ];
+
+  info += '<br><b>Handler probes:</b><br>';
+  var foundHandlers = [];
   handlers.forEach(function(h){
     var exists = false;
     try {
       exists = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[h]);
+      if(exists) foundHandlers.push(h);
     } catch(e){}
-    info += '- ' + h + ': ' + exists + '<br>';
+    var cls = exists ? 'ok' : '';
+    info += '<span class="'+cls+'">'+h+':'+exists+'</span> ';
   });
 
-  // Security checks
-  info += '<br><b>Security:</b><br>';
-  info += '- isSecureContext: ' + window.isSecureContext + '<br>';
-  info += '- location.protocol: ' + location.protocol + '<br>';
+  // Security context
+  info += '<br><br><b>Security:</b><br>';
+  info += 'isSecureContext: '+window.isSecureContext+' | ';
+  info += 'protocol: '+location.protocol+' | ';
+  info += 'crossOriginIsolated: '+window.crossOriginIsolated;
 
   document.getElementById('webkit-info').innerHTML = info;
+  if(foundHandlers.length) log('Found handlers: '+foundHandlers.join(', '), 'critical');
 })();
 
-// Feature detection
+// ═══════════════════════════════════════════════════════════════
+// WINDOW PROPERTIES DEEP SCAN
+// ═══════════════════════════════════════════════════════════════
 (function(){
   var info = '';
 
-  info += '<b>window.open:</b> ' + (typeof window.open) + '<br>';
-  info += '<b>location.assign:</b> ' + (typeof location.assign) + '<br>';
-  info += '<b>location.replace:</b> ' + (typeof location.replace) + '<br>';
-  info += '<b>document.createElement:</b> ' + (typeof document.createElement) + '<br>';
+  // Check for Instagram-specific properties
+  var igProps = ['__INSTAGRAM__', '__instagram', 'InstagramInterface', 'IGBridge',
+                 '__fb', '__FACEBOOK__', 'FBInterface', 'webkit', 'native'];
 
-  // Check if popups blocked
-  info += '<br><b>Popup test:</b> ';
-  try {
-    var w = window.open('about:blank', '_blank');
-    if(w) {
-      info += '<span class="ok">allowed</span>';
-      w.close();
-    } else {
-      info += '<span class="error">blocked (returned null)</span>';
+  info += '<b>Instagram/FB Properties:</b><br>';
+  igProps.forEach(function(p){
+    var exists = p in window;
+    var val = exists ? (typeof window[p]) : 'N/A';
+    info += p + ': ' + (exists ? '<span class="critical">'+val+'</span>' : 'no') + ' | ';
+  });
+
+  // Check for unusual window properties
+  info += '<br><br><b>Unusual Properties (non-standard):</b><br>';
+  var standardProps = ['addEventListener','alert','atob','blur','btoa','caches','cancelAnimationFrame',
+    'clearInterval','clearTimeout','close','closed','confirm','console','crypto','customElements',
+    'devicePixelRatio','document','fetch','focus','frameElement','frames','getComputedStyle',
+    'getSelection','history','indexedDB','innerHeight','innerWidth','isSecureContext','length',
+    'localStorage','location','locationbar','matchMedia','menubar','moveBy','moveTo','name',
+    'navigator','onabort','onafterprint','onanimationend','onanimationiteration','onanimationstart',
+    'onbeforeprint','onbeforeunload','onblur','oncanplay','oncanplaythrough','onchange','onclick',
+    'onclose','oncontextmenu','oncuechange','ondblclick','ondrag','ondragend','ondragenter',
+    'ondragleave','ondragover','ondragstart','ondrop','ondurationchange','onemptied','onended',
+    'onerror','onfocus','onhashchange','oninput','oninvalid','onkeydown','onkeypress','onkeyup',
+    'onlanguagechange','onload','onloadeddata','onloadedmetadata','onloadstart','onmessage',
+    'onmousedown','onmouseenter','onmouseleave','onmousemove','onmouseout','onmouseover','onmouseup',
+    'onoffline','ononline','onpagehide','onpageshow','onpause','onplay','onplaying','onpopstate',
+    'onprogress','onratechange','onrejectionhandled','onreset','onresize','onscroll','onseeked',
+    'onseeking','onselect','onstalled','onstorage','onsubmit','onsuspend','ontimeupdate','ontoggle',
+    'ontransitionend','onunhandledrejection','onunload','onvolumechange','onwaiting','open',
+    'opener','origin','outerHeight','outerWidth','pageXOffset','pageYOffset','parent','performance',
+    'personalbar','postMessage','print','prompt','queueMicrotask','releaseEvents','requestAnimationFrame',
+    'requestIdleCallback','resizeBy','resizeTo','screen','screenLeft','screenTop','screenX','screenY',
+    'scroll','scrollBy','scrollTo','scrollX','scrollY','scrollbars','self','sessionStorage',
+    'setInterval','setTimeout','speechSynthesis','status','statusbar','stop','styleMedia','toolbar',
+    'top','visualViewport','window'];
+
+  var unusual = [];
+  for(var prop in window){
+    if(standardProps.indexOf(prop) === -1 && prop.indexOf('on') !== 0 && prop.indexOf('webkit') !== 0){
+      try {
+        var type = typeof window[prop];
+        if(type === 'function' || type === 'object'){
+          unusual.push(prop + ':' + type);
+        }
+      } catch(e){}
     }
-  } catch(e) {
-    info += '<span class="error">blocked (' + e.message + ')</span>';
   }
+  info += unusual.slice(0, 30).join(', ') + (unusual.length > 30 ? '...(+' + (unusual.length-30) + ')' : '');
 
-  document.getElementById('features').innerHTML = info;
+  document.getElementById('window-props').innerHTML = info;
 })();
 
-// Test functions
-function log(msg, type){
-  var r = document.getElementById('results');
-  var color = type === 'ok' ? '#0f0' : type === 'error' ? '#f00' : '#ff0';
-  r.innerHTML += '<div style="color:'+color+';margin:5px 0">' + new Date().toLocaleTimeString() + ' - ' + msg + '</div>';
-}
+// ═══════════════════════════════════════════════════════════════
+// PERFORMANCE API ANALYSIS
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  var info = '';
 
-function testLocationHref(){
-  log('Testing location.href with x-safari-https...', 'warn');
+  if(window.performance){
+    var timing = performance.timing;
+    var nav = performance.navigation;
+
+    info += '<b>Navigation type:</b> ' + nav.type + ' ('+['navigate','reload','back_forward','reserved'][nav.type]+')<br>';
+    info += '<b>Redirect count:</b> ' + nav.redirectCount + '<br>';
+
+    var loadTime = timing.loadEventEnd - timing.navigationStart;
+    var dnsTime = timing.domainLookupEnd - timing.domainLookupStart;
+    var connectTime = timing.connectEnd - timing.connectStart;
+    var responseTime = timing.responseEnd - timing.responseStart;
+
+    info += '<br><b>Timing (ms):</b><br>';
+    info += 'Total load: ' + loadTime + ' | DNS: ' + dnsTime + ' | Connect: ' + connectTime + ' | Response: ' + responseTime;
+
+    // Resource timing
+    var resources = performance.getEntriesByType('resource');
+    info += '<br><br><b>Resources loaded:</b> ' + resources.length;
+  } else {
+    info = 'Performance API not available';
+  }
+
+  document.getElementById('perf-info').innerHTML = info;
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// SECURITY CONTEXT
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  var info = '';
+
+  // CSP check
+  info += '<b>Content Security Policy:</b><br>';
+  var meta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+  info += meta ? meta.content : '(none in meta)';
+
+  // Feature policy
+  info += '<br><br><b>Permissions/Features:</b><br>';
+  var features = ['geolocation', 'camera', 'microphone', 'clipboard-read', 'clipboard-write'];
+  features.forEach(function(f){
+    if(navigator.permissions){
+      navigator.permissions.query({name:f}).then(function(r){
+        log('Permission '+f+': '+r.state, r.state === 'granted' ? 'ok' : 'warn');
+      }).catch(function(){});
+    }
+  });
+  info += 'Check log for permission results...';
+
+  // Storage access
+  info += '<br><br><b>Storage:</b><br>';
+  info += 'localStorage: ' + (!!window.localStorage) + ' | ';
+  info += 'sessionStorage: ' + (!!window.sessionStorage) + ' | ';
+  info += 'indexedDB: ' + (!!window.indexedDB) + ' | ';
+  info += 'cookies: ' + navigator.cookieEnabled;
+
+  document.getElementById('security-info').innerHTML = info;
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// NATIVE BRIDGE DETECTION
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  var info = '';
+
+  // Check various bridge patterns
+  var bridges = {
+    'window.webkit': !!window.webkit,
+    'window.webkit.messageHandlers': !!(window.webkit && window.webkit.messageHandlers),
+    'window.postMessage': typeof window.postMessage === 'function',
+    'window.ReactNativeWebView': !!window.ReactNativeWebView,
+    'window.Android': !!window.Android,
+    'window.flutter_inappwebview': !!window.flutter_inappwebview,
+    'window.chrome.webview': !!(window.chrome && window.chrome.webview),
+    'document.hasStorageAccess': typeof document.hasStorageAccess === 'function',
+  };
+
+  info += '<b>Bridge Detection:</b><br>';
+  for(var bridge in bridges){
+    var cls = bridges[bridge] ? 'critical' : '';
+    info += '<span class="'+cls+'">'+bridge+': '+bridges[bridge]+'</span><br>';
+  }
+
+  // Try to detect custom URL scheme handlers
+  info += '<br><b>Scheme Handler Probe:</b><br>';
+  info += 'Testing in scheme tests tab...';
+
+  document.getElementById('native-bridges').innerHTML = info;
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// SCHEME TESTING
+// ═══════════════════════════════════════════════════════════════
+function testScheme(url){
+  var scheme = url.split('://')[0];
+  log('Testing scheme: ' + scheme, 'warn');
+
+  var startTime = performance.now();
+  var escaped = false;
+
+  // Set up visibility change detection
+  var visHandler = function(){
+    if(document.hidden){
+      escaped = true;
+      var elapsed = performance.now() - startTime;
+      log('ESCAPE DETECTED via visibility change! Scheme: ' + scheme + ' (' + elapsed.toFixed(0) + 'ms)', 'critical');
+    }
+  };
+  document.addEventListener('visibilitychange', visHandler);
+
+  // Set up blur detection
+  var blurHandler = function(){
+    var elapsed = performance.now() - startTime;
+    log('Window blur detected for: ' + scheme + ' (' + elapsed.toFixed(0) + 'ms)', 'warn');
+  };
+  window.addEventListener('blur', blurHandler);
+
+  // Clean up after 3 seconds
+  setTimeout(function(){
+    document.removeEventListener('visibilitychange', visHandler);
+    window.removeEventListener('blur', blurHandler);
+    if(!escaped){
+      log('No escape detected for: ' + scheme + ' (3s timeout)', 'error');
+    }
+  }, 3000);
+
+  // Execute the navigation
   try {
-    location.href = 'x-safari-https://cmehere.net/mememe?browser=1';
-    log('location.href executed (check if browser opened)', 'ok');
+    location.href = url;
+    log('location.href executed for: ' + scheme, 'info');
   } catch(e){
-    log('location.href failed: ' + e.message, 'error');
+    log('Error testing ' + scheme + ': ' + e.message, 'error');
   }
 }
 
-function testWindowOpen(){
-  log('Testing window.open with x-safari-https...', 'warn');
-  try {
-    var w = window.open('x-safari-https://cmehere.net/mememe?browser=1', '_blank');
-    log('window.open returned: ' + (w ? 'window object' : 'null'), w ? 'ok' : 'error');
-  } catch(e){
-    log('window.open failed: ' + e.message, 'error');
-  }
-}
+function testUniversalLink(){
+  log('Testing Universal Link pattern...', 'warn');
+  // Create a link that would trigger universal link handling
+  var a = document.createElement('a');
+  a.href = 'https://cmehere.net/debug?ul=1';
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
 
-function testAnchorClick(){
-  log('Testing anchor click...', 'warn');
+  var startTime = performance.now();
+
+  // Try programmatic click
   try {
-    var a = document.createElement('a');
-    a.href = 'x-safari-https://cmehere.net/mememe?browser=1';
-    a.target = '_blank';
-    document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
-    log('Anchor click executed', 'ok');
+    setTimeout(function(){
+      log('Universal link click completed in ' + (performance.now() - startTime).toFixed(0) + 'ms', 'info');
+      a.remove();
+    }, 100);
   } catch(e){
-    log('Anchor click failed: ' + e.message, 'error');
+    log('Universal link error: ' + e.message, 'error');
+    a.remove();
   }
 }
 
-function testAllSchemes(){
+// ═══════════════════════════════════════════════════════════════
+// TIMING TESTS
+// ═══════════════════════════════════════════════════════════════
+function testTiming(delay){
+  log('Testing escape with ' + delay + 'ms delay...', 'warn');
+  setTimeout(function(){
+    testScheme('x-safari-https://cmehere.net/debug?delay=' + delay);
+  }, delay);
+}
+
+function testMultiAttempt(pattern){
+  log('Testing multi-attempt pattern: ' + pattern, 'warn');
+  var delays;
+
+  switch(pattern){
+    case 'rapid':
+      delays = [50, 100, 150];
+      break;
+    case 'staggered':
+      delays = [100, 300, 500];
+      break;
+    case 'exponential':
+      delays = [100, 200, 400];
+      break;
+    case 'juicy':
+      // Juicy.bio pattern reverse-engineered
+      delays = [0, 100, 200, 300];
+      break;
+    default:
+      delays = [100, 200, 300];
+  }
+
   var schemes = [
-    'x-safari-https://cmehere.net/mememe?browser=1',
-    'googlechrome://cmehere.net/mememe?browser=1',
-    'googlechromes://cmehere.net/mememe?browser=1'
+    'x-safari-https://cmehere.net/debug?p=' + pattern,
+    'googlechrome://cmehere.net/debug?p=' + pattern,
+    'googlechromes://cmehere.net/debug?p=' + pattern
   ];
-  log('Testing all schemes with 300ms intervals...', 'warn');
-  schemes.forEach(function(scheme, i){
+
+  delays.forEach(function(delay, i){
     setTimeout(function(){
-      log('Trying: ' + scheme.split('://')[0] + '://', 'warn');
+      var scheme = schemes[i % schemes.length];
+      log('Attempt ' + (i+1) + ' at ' + delay + 'ms: ' + scheme.split('://')[0], 'info');
       try {
-        var w = window.open(scheme, '_blank');
-        log('Result: ' + (w ? 'opened' : 'blocked'), w ? 'ok' : 'error');
-      } catch(e){
-        log('Error: ' + e.message, 'error');
-      }
-    }, i * 300);
+        window.open(scheme, '_blank');
+      } catch(e){}
+    }, delay);
   });
 }
+
+function testAfterLoad(){
+  window.addEventListener('load', function(){
+    log('Load event fired, testing escape...', 'warn');
+    testScheme('x-safari-https://cmehere.net/debug?after=load');
+  });
+}
+
+function testAfterRAF(){
+  requestAnimationFrame(function(){
+    log('RAF fired, testing escape...', 'warn');
+    testScheme('x-safari-https://cmehere.net/debug?after=raf');
+  });
+}
+
+function testAfterIdle(){
+  if(window.requestIdleCallback){
+    requestIdleCallback(function(){
+      log('Idle callback fired, testing escape...', 'warn');
+      testScheme('x-safari-https://cmehere.net/debug?after=idle');
+    });
+  } else {
+    log('requestIdleCallback not supported', 'error');
+  }
+}
+
+function testAfterMicrotask(){
+  Promise.resolve().then(function(){
+    log('Microtask fired, testing escape...', 'warn');
+    testScheme('x-safari-https://cmehere.net/debug?after=microtask');
+  });
+}
+
+function testDoubleClick(){
+  log('Click once more for double-click test...', 'warn');
+}
+function actualDoubleClick(){
+  log('Double-click detected! Testing escape...', 'critical');
+  testScheme('x-safari-https://cmehere.net/debug?gesture=dblclick');
+}
+function testMouseDown(){
+  log('MouseDown detected! Testing escape...', 'warn');
+  testScheme('x-safari-https://cmehere.net/debug?gesture=mousedown');
+}
+function testTouchStart(){
+  log('TouchStart detected! Testing escape...', 'warn');
+  testScheme('x-safari-https://cmehere.net/debug?gesture=touchstart');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NATIVE COMMUNICATION TESTS
+// ═══════════════════════════════════════════════════════════════
+function testPostMessage(type){
+  log('Testing postMessage: ' + type, 'warn');
+  try {
+    var msg = {type: type, url: 'https://cmehere.net/debug?pm=' + type};
+    window.postMessage(JSON.stringify(msg), '*');
+    if(window.webkit && window.webkit.messageHandlers){
+      if(window.webkit.messageHandlers[type]){
+        window.webkit.messageHandlers[type].postMessage(msg);
+        log('Sent to webkit.messageHandlers.' + type, 'ok');
+      }
+    }
+    if(window.parent !== window){
+      window.parent.postMessage(JSON.stringify(msg), '*');
+      log('Sent to parent frame', 'info');
+    }
+  } catch(e){
+    log('postMessage error: ' + e.message, 'error');
+  }
+}
+
+function testMetaRefresh(seconds){
+  log('Testing meta refresh with ' + seconds + 's delay...', 'warn');
+  var meta = document.createElement('meta');
+  meta.httpEquiv = 'refresh';
+  meta.content = seconds + ';url=x-safari-https://cmehere.net/debug?meta=' + seconds;
+  document.head.appendChild(meta);
+  log('Meta refresh tag added', 'info');
+}
+
+function testIframeEscape(method){
+  log('Testing iframe escape: ' + method, 'warn');
+  var iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  document.body.appendChild(iframe);
+
+  switch(method){
+    case 'src':
+      iframe.src = 'x-safari-https://cmehere.net/debug?iframe=src';
+      break;
+    case 'sandbox':
+      iframe.sandbox = 'allow-scripts allow-top-navigation';
+      iframe.srcdoc = '<script>top.location="x-safari-https://cmehere.net/debug?iframe=sandbox"<\\/script>';
+      break;
+    case 'srcdoc':
+      iframe.srcdoc = '<script>window.location="x-safari-https://cmehere.net/debug?iframe=srcdoc"<\\/script>';
+      break;
+  }
+
+  setTimeout(function(){ iframe.remove(); }, 3000);
+  log('Iframe created with method: ' + method, 'info');
+}
+
+function testFormSubmit(method){
+  log('Testing form submit: ' + method, 'warn');
+  var form = document.createElement('form');
+  form.action = 'x-safari-https://cmehere.net/debug?form=' + method;
+  form.method = method === 'POST' ? 'POST' : 'GET';
+  if(method === 'target') form.target = '_blank';
+  form.style.display = 'none';
+  document.body.appendChild(form);
+  form.submit();
+  setTimeout(function(){ form.remove(); }, 1000);
+}
+
+function testNavMethod(method){
+  var url = 'x-safari-https://cmehere.net/debug?nav=' + method;
+  log('Testing navigation method: ' + method, 'warn');
+
+  switch(method){
+    case 'href':
+      location.href = url;
+      break;
+    case 'assign':
+      location.assign(url);
+      break;
+    case 'replace':
+      location.replace(url);
+      break;
+    case 'open':
+      window.open(url);
+      break;
+    case 'openBlank':
+      window.open(url, '_blank');
+      break;
+    case 'openSelf':
+      window.open(url, '_self');
+      break;
+    case 'anchor':
+      var a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      break;
+    case 'anchorDispatch':
+      var a2 = document.createElement('a');
+      a2.href = url;
+      a2.target = '_blank';
+      document.body.appendChild(a2);
+      a2.dispatchEvent(new MouseEvent('click', {bubbles:true,cancelable:true,view:window}));
+      a2.remove();
+      break;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ADVANCED TECHNIQUES
+// ═══════════════════════════════════════════════════════════════
+function testBlobRedirect(){
+  log('Testing blob URL redirect...', 'warn');
+  var html = '<html><head><meta http-equiv="refresh" content="0;url=x-safari-https://cmehere.net/debug?blob=1"></head></html>';
+  var blob = new Blob([html], {type: 'text/html'});
+  var url = URL.createObjectURL(blob);
+  window.open(url);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+}
+
+function testDataUri(){
+  log('Testing data URI redirect...', 'warn');
+  var html = '<html><script>location="x-safari-https://cmehere.net/debug?data=1"<\\/script></html>';
+  var dataUri = 'data:text/html,' + encodeURIComponent(html);
+  window.open(dataUri);
+}
+
+function checkServiceWorker(){
+  if('serviceWorker' in navigator){
+    log('Service Worker supported', 'ok');
+    navigator.serviceWorker.getRegistrations().then(function(regs){
+      log('SW registrations: ' + regs.length, 'info');
+    });
+  } else {
+    log('Service Worker NOT supported', 'error');
+  }
+}
+
+function testHistoryPush(){
+  log('Testing history.pushState...', 'warn');
+  history.pushState({}, '', 'x-safari-https://cmehere.net/debug?history=push');
+  log('pushState executed (check URL bar)', 'info');
+}
+
+function testHistoryReplace(){
+  log('Testing history.replaceState...', 'warn');
+  history.replaceState({}, '', 'x-safari-https://cmehere.net/debug?history=replace');
+  log('replaceState executed (check URL bar)', 'info');
+}
+
+function testHistoryBack(){
+  log('Testing history.back()...', 'warn');
+  history.back();
+}
+
+function testDocWrite(){
+  log('Testing document.write redirect...', 'warn');
+  document.write('<html><script>location="x-safari-https://cmehere.net/debug?docwrite=1"<\\/script></html>');
+}
+
+function testDocOpen(){
+  log('Testing document.open/write/close...', 'warn');
+  document.open();
+  document.write('<script>location="x-safari-https://cmehere.net/debug?docopen=1"<\\/script>');
+  document.close();
+}
+
+function testScriptInject(){
+  log('Testing script injection redirect...', 'warn');
+  var s = document.createElement('script');
+  s.textContent = 'location.href="x-safari-https://cmehere.net/debug?script=1"';
+  document.body.appendChild(s);
+}
+
+function testImgError(){
+  log('Testing IMG onerror redirect...', 'warn');
+  var img = document.createElement('img');
+  img.onerror = function(){ location.href = 'x-safari-https://cmehere.net/debug?img=error'; };
+  img.src = 'https://invalid-url-' + Date.now() + '.jpg';
+  document.body.appendChild(img);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FINGERPRINTING
+// ═══════════════════════════════════════════════════════════════
+function runFullFingerprint(){
+  log('Running full fingerprint analysis...', 'warn');
+
+  var fp = {
+    requestId: requestId,
+    timestamp: new Date().toISOString(),
+
+    // Navigator
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    vendor: navigator.vendor,
+    language: navigator.language,
+    languages: navigator.languages,
+    cookieEnabled: navigator.cookieEnabled,
+    doNotTrack: navigator.doNotTrack,
+    hardwareConcurrency: navigator.hardwareConcurrency,
+    maxTouchPoints: navigator.maxTouchPoints,
+
+    // Screen
+    screenWidth: screen.width,
+    screenHeight: screen.height,
+    screenAvailWidth: screen.availWidth,
+    screenAvailHeight: screen.availHeight,
+    colorDepth: screen.colorDepth,
+    pixelDepth: screen.pixelDepth,
+    devicePixelRatio: window.devicePixelRatio,
+
+    // Window
+    innerWidth: window.innerWidth,
+    innerHeight: window.innerHeight,
+    outerWidth: window.outerWidth,
+    outerHeight: window.outerHeight,
+
+    // Security
+    isSecureContext: window.isSecureContext,
+    crossOriginIsolated: window.crossOriginIsolated,
+
+    // WebKit
+    hasWebkit: !!window.webkit,
+    hasMessageHandlers: !!(window.webkit && window.webkit.messageHandlers),
+
+    // Storage
+    hasLocalStorage: !!window.localStorage,
+    hasSessionStorage: !!window.sessionStorage,
+    hasIndexedDB: !!window.indexedDB,
+
+    // Features
+    hasServiceWorker: 'serviceWorker' in navigator,
+    hasWebGL: !!window.WebGLRenderingContext,
+    hasWebGL2: !!window.WebGL2RenderingContext,
+
+    // Timing
+    performanceNow: performance.now(),
+    navigationType: performance.navigation ? performance.navigation.type : null,
+
+    // Canvas fingerprint
+    canvasHash: getCanvasFingerprint(),
+
+    // Audio fingerprint
+    audioContextSampleRate: getAudioContext(),
+
+    // WebGL info
+    webglInfo: getWebGLInfo()
+  };
+
+  var resultDiv = document.getElementById('fingerprint-results');
+  resultDiv.innerHTML = '<pre style="max-height:400px;overflow:auto">' + JSON.stringify(fp, null, 2) + '</pre>';
+  resultDiv.innerHTML += '<button onclick="copyFingerprint()">📋 Copy Fingerprint</button>';
+
+  window.currentFingerprint = fp;
+  log('Fingerprint complete. Copy and compare between accounts!', 'ok');
+}
+
+function getCanvasFingerprint(){
+  try {
+    var canvas = document.createElement('canvas');
+    canvas.width = 200;
+    canvas.height = 50;
+    var ctx = canvas.getContext('2d');
+    ctx.textBaseline = 'top';
+    ctx.font = '14px Arial';
+    ctx.fillText('Instagram Debug 🔍', 2, 2);
+    return canvas.toDataURL().slice(-50);
+  } catch(e){
+    return 'error';
+  }
+}
+
+function getAudioContext(){
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return ctx.sampleRate;
+  } catch(e){
+    return null;
+  }
+}
+
+function getWebGLInfo(){
+  try {
+    var canvas = document.createElement('canvas');
+    var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if(!gl) return null;
+    return {
+      vendor: gl.getParameter(gl.VENDOR),
+      renderer: gl.getParameter(gl.RENDERER),
+      version: gl.getParameter(gl.VERSION)
+    };
+  } catch(e){
+    return null;
+  }
+}
+
+function copyFingerprint(){
+  if(window.currentFingerprint){
+    navigator.clipboard.writeText(JSON.stringify(window.currentFingerprint, null, 2))
+      .then(function(){ log('Fingerprint copied!', 'ok'); });
+  }
+}
+
+function compareFingerprints(){
+  var input = document.getElementById('fp-input').value;
+  log('Comparing fingerprints... (manual comparison needed)', 'warn');
+  // User will need to manually compare the two fingerprints
+}
+
+function runNetworkAnalysis(){
+  log('Running network timing analysis...', 'warn');
+
+  var results = {
+    timestamp: new Date().toISOString(),
+    tests: []
+  };
+
+  // Test fetch timing
+  var startFetch = performance.now();
+  fetch('/debug?network=fetch&t=' + Date.now())
+    .then(function(r){ return r.text(); })
+    .then(function(){
+      var elapsed = performance.now() - startFetch;
+      results.tests.push({type:'fetch', elapsed: elapsed});
+      log('Fetch completed in ' + elapsed.toFixed(0) + 'ms', 'info');
+    })
+    .catch(function(e){
+      log('Fetch error: ' + e.message, 'error');
+    });
+
+  // Test XHR timing
+  var startXhr = performance.now();
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', '/debug?network=xhr&t=' + Date.now());
+  xhr.onload = function(){
+    var elapsed = performance.now() - startXhr;
+    results.tests.push({type:'xhr', elapsed: elapsed});
+    log('XHR completed in ' + elapsed.toFixed(0) + 'ms', 'info');
+  };
+  xhr.onerror = function(){
+    log('XHR error', 'error');
+  };
+  xhr.send();
+
+  // Test beacon
+  var beaconResult = navigator.sendBeacon('/debug?network=beacon&t=' + Date.now(), 'test');
+  log('sendBeacon returned: ' + beaconResult, beaconResult ? 'ok' : 'error');
+
+  document.getElementById('network-timing').innerHTML += '<pre>' + JSON.stringify(results, null, 2) + '</pre>';
+}
+
+// Initialize
+log('ULTRA DEBUG v2.0 initialized', 'ok');
+log('Request ID: ' + requestId, 'info');
+log('Run tests from the tabs above', 'info');
 </script>
 </body></html>`);
 });
