@@ -2046,14 +2046,21 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
 
       var overlay=document.getElementById('inappOverlay');
 
-      // Intercept clicks on /go/ links (encrypted redirects to OnlyFans, etc.)
+      // Intercept clicks on EXCLUSIVE CONTENT only (Featured Links + Carousel)
+      // Social icons should work normally without overlay
       document.addEventListener('click',function(e){
         var link=e.target.closest('a[href]');
         if(!link)return;
 
         var href=link.getAttribute('href');
-        // Intercept /go/ links (encrypted external redirects)
+        // Only intercept /go/ links
         if(!href||!href.startsWith('/go/'))return;
+
+        // ONLY intercept Featured Links (.feat-link) and Carousel (.car-link)
+        // Social icons (.social-icon) should pass through normally
+        var isFeatured=link.classList.contains('feat-link')||link.closest('.feat-link');
+        var isCarousel=link.classList.contains('car-link')||link.closest('.car-link');
+        if(!isFeatured&&!isCarousel)return;
 
         // Block the click and show overlay
         e.preventDefault();
