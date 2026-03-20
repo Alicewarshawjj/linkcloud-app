@@ -1464,6 +1464,16 @@ app.get('/admin', (req, res) => {
 // ═══ PROFILE PAGE (Dynamic with Pentagon-Level Protection) ═══
 app.get('/', async (req, res) => {
   try {
+    // Check for source param (Instagram-friendly: /?s=mememe instead of /mememe)
+    const source = req.query.s;
+    if (source && !req.query.browser) {
+      // Check if this source needs auto-escape
+      const platform = SOURCE_PLATFORM_MAP[source.toLowerCase()];
+      if (platform) {
+        return res.send(generateAutoOpenPage(source, platform));
+      }
+    }
+
     // Check if DB is ready
     if (!dbReady) {
       return res.status(200).send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="2"><title>Loading...</title></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0a14;color:#fff;font-family:system-ui"><div style="text-align:center"><div style="font-size:48px;margin-bottom:16px">⏳</div><h1>Starting up...</h1><p style="color:#888">Please wait a moment</p></div></body></html>`);
@@ -1482,7 +1492,9 @@ app.get('/', async (req, res) => {
     const geoInfo = getCountryFromIP(req);
     const isGeoBlocked = geoInfo.countryCode === 'IL';
 
-    res.send(renderProfilePage(data, seo, isBotRequest, null, isGeoBlocked));
+    // Pass source from query param if present
+    const sourceParam = req.query.s || null;
+    res.send(renderProfilePage(data, seo, isBotRequest, sourceParam, isGeoBlocked));
   } catch (e) {
     console.error('Render error:', e);
     res.status(500).send('Server error');
@@ -1576,6 +1588,10 @@ a{color:#fff;margin-top:20px}
 // ═══ TRAFFIC SOURCE ROUTE (Clean URLs: /ig-main, /twitter1, etc.) ═══
 // Maps custom source URLs to their platform-specific escape logic
 const SOURCE_PLATFORM_MAP = {
+  // Instagram sources - use auto-open escape (use /?s=mememe for IG business accounts)
+  'mememe': 'instagram',
+  'seemorefit': 'instagram',
+  'ig': 'instagram',
   // Reddit sources - use auto-open escape
   'seemorer': 'reddit',
   'rd': 'reddit',
@@ -1589,13 +1605,20 @@ const SOURCE_PLATFORM_MAP = {
   'seemorefb': 'facebook'
 };
 
-// Auto-open escape page generator (works for Reddit, Threads, Snapchat, etc.)
+// Auto-open escape page generator (works for Reddit, Threads, Snapchat, Instagram, etc.)
 // Snapchat needs delay to allow "Attach to Snap" button to appear
+// Instagram business accounts need root URL with query params (no path)
 function generateAutoOpenPage(source, platform) {
   // Snapchat needs 3 second delay before escape attempt
   const isSnapchat = platform === 'snapchat';
+  const isInstagram = platform === 'instagram';
   const delay = isSnapchat ? 3000 : 100;
   const delayText = isSnapchat ? 'Waiting for Snapchat...' : 'Opening in browser...';
+
+  // Instagram business accounts block paths, use query params instead
+  const targetUrl = isInstagram
+    ? '/?s=${source}&browser=1'
+    : '/${source}?browser=1';
 
   return `<!DOCTYPE html>
 <html><head>
@@ -1613,11 +1636,12 @@ a{color:#fff;margin-top:20px}
 </head><body>
 ${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="spinner"></div>'}
 <p id="status">${delayText}</p>
-<a href="/${source}?browser=1">Tap here if nothing happens</a>
+<a href="${targetUrl}">Tap here if nothing happens</a>
 <script>
 (function(){
   var source='${source}';
-  var url='https://'+location.hostname+'/'+source+'?browser=1';
+  var isInstagram=${isInstagram};
+  var url='https://'+location.hostname+(isInstagram ? '/?s='+source+'&browser=1' : '/'+source+'?browser=1');
   var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
   var isAndroid=/Android/i.test(navigator.userAgent);
   var delay=${delay};
@@ -1631,7 +1655,8 @@ ${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="sp
       // Chrome as fallback
       setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},300);
     }else if(isAndroid){
-      location.href='intent://'+location.hostname+'/'+source+'?browser=1#Intent;scheme=https;package=com.android.chrome;end';
+      var intentPath=isInstagram ? '/?s='+source+'&browser=1' : '/'+source+'?browser=1';
+      location.href='intent://'+location.hostname+intentPath+'#Intent;scheme=https;package=com.android.chrome;end';
     }else{
       location.href=url;
     }
