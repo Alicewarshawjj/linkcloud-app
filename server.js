@@ -1662,7 +1662,7 @@ ${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="sp
 
 app.get('/:source', async (req, res, next) => {
   // Skip if it's a known route
-  const knownRoutes = ['admin', 'go', 'api', 'favicon.ico', 'robots.txt', 'debug', 'health', 'xtest', 'igescape', 'igopen'];
+  const knownRoutes = ['admin', 'go', 'api', 'favicon.ico', 'robots.txt', 'debug', 'health', 'xtest', 'igescape', 'igopen', 'escapelab', 'dlredirect', 'metaredirect', 'formredirect'];
   const source = req.params.source;
 
   // Check if it looks like a file or known route
@@ -3490,6 +3490,341 @@ app.get('/health', (req, res) => {
     console.error('Health check DB error:', e.message);
     res.status(200).json({ status: 'degraded', db: false });
   });
+});
+
+// ═══ ESCAPE LAB V3 - Testing ALL known escape methods ═══
+// Comprehensive testing page with all discovered escape techniques
+app.get('/escapelab', (req, res) => {
+  const targetUrl = req.query.url || 'https://cmehere.net/mememe';
+  const domain = new URL(targetUrl).hostname;
+  const stripped = targetUrl.replace(/^https?:\/\//, '');
+  const pathOnly = new URL(targetUrl).pathname;
+
+  res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>🔬 Escape Lab V3</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a14;color:#fff;padding:15px}
+h1{font-size:24px;margin-bottom:5px;text-align:center}
+.subtitle{color:#666;font-size:12px;text-align:center;margin-bottom:15px}
+.section{background:#1a1a2e;border-radius:12px;padding:15px;margin-bottom:15px}
+.section h2{font-size:14px;color:#888;margin-bottom:10px;border-bottom:1px solid #333;padding-bottom:5px}
+.btn{display:block;width:100%;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;padding:12px;font-size:14px;border-radius:8px;cursor:pointer;margin-bottom:8px;text-decoration:none;text-align:center}
+.btn:active{transform:scale(0.98)}
+.btn.green{background:linear-gradient(135deg,#11998e,#38ef7d)}
+.btn.orange{background:linear-gradient(135deg,#f2994a,#f2c94c);color:#000}
+.btn.red{background:linear-gradient(135deg,#e74c3c,#c0392b)}
+.btn.blue{background:linear-gradient(135deg,#2196F3,#21CBF3)}
+.btn.gray{background:#444}
+.log{background:#000;border-radius:8px;padding:10px;font-family:monospace;font-size:11px;max-height:200px;overflow-y:auto;margin-top:10px}
+.log-entry{padding:3px 0;border-bottom:1px solid #222}
+.ok{color:#2ecc71}.error{color:#e74c3c}.warn{color:#f39c12}.info{color:#3498db}.critical{color:#e91e63}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.status{font-size:11px;color:#666;text-align:center;margin-top:10px}
+.target{background:#222;padding:8px;border-radius:6px;font-size:11px;word-break:break-all;margin-bottom:10px}
+</style>
+</head><body>
+
+<h1>🔬 Escape Lab V3</h1>
+<p class="subtitle">Testing ALL known Instagram escape methods</p>
+
+<div class="target">
+  <strong>Target:</strong> ${targetUrl}
+</div>
+
+<div class="section">
+  <h2>🏆 PROVEN WORKING (x-web-search)</h2>
+  <div class="grid">
+    <button class="btn green" onclick="test('x-web-search://?${domain}')">?domain</button>
+    <button class="btn green" onclick="test('x-web-search://${domain}')">://domain</button>
+    <button class="btn green" onclick="test('x-web-search://?site:${domain}')">?site:domain</button>
+    <button class="btn green" onclick="test('x-web-search://?${encodeURIComponent(targetUrl)}')">?fullURL</button>
+  </div>
+</div>
+
+<div class="section">
+  <h2>🆕 SHORTCUTS FALLBACK (x-callback-url)</h2>
+  <p style="font-size:11px;color:#666;margin-bottom:10px">Uses iOS Shortcuts app with x-error fallback - might bypass restrictions!</p>
+  <button class="btn blue" onclick="testShortcuts()">shortcuts://x-callback-url → Safari</button>
+  <button class="btn blue" onclick="testShortcutsRandom()">Random Shortcut Name (error fallback)</button>
+</div>
+
+<div class="section">
+  <h2>📥 FILE DOWNLOAD TRICK</h2>
+  <p style="font-size:11px;color:#666;margin-bottom:10px">Pretends to be a file download - forces external browser</p>
+  <button class="btn orange" onclick="testDownload()">Download Redirect Trick</button>
+  <a class="btn orange" href="/dlredirect?url=${encodeURIComponent(targetUrl)}" download="redirect.html">Direct Download Link</a>
+</div>
+
+<div class="section">
+  <h2>🍎 SAFARI SCHEMES</h2>
+  <div class="grid">
+    <button class="btn" onclick="test('x-safari-https://${stripped}')">x-safari-https</button>
+    <button class="btn" onclick="test('x-safari-http://${stripped}')">x-safari-http</button>
+    <button class="btn gray" onclick="test('com-apple-mobilesafari-tab:${targetUrl}')">mobilesafari-tab</button>
+    <button class="btn gray" onclick="test('com-apple-mobilesafari:${targetUrl}')">mobilesafari</button>
+  </div>
+</div>
+
+<div class="section">
+  <h2>🌐 OTHER BROWSER SCHEMES</h2>
+  <div class="grid">
+    <button class="btn" onclick="test('googlechrome://${stripped}')">Chrome</button>
+    <button class="btn" onclick="test('googlechrome://navigate?url=${encodeURIComponent(targetUrl)}')">Chrome Navigate</button>
+    <button class="btn" onclick="test('firefox://open-url?url=${encodeURIComponent(targetUrl)}')">Firefox</button>
+    <button class="btn" onclick="test('opera://open?url=${encodeURIComponent(targetUrl)}')">Opera</button>
+  </div>
+</div>
+
+<div class="section">
+  <h2>🤖 ANDROID INTENTS</h2>
+  <div class="grid">
+    <button class="btn blue" onclick="test('intent://${domain}#Intent;scheme=https;end')">Basic Intent</button>
+    <button class="btn blue" onclick="test('intent://${domain}${pathOnly}#Intent;scheme=https;end')">Intent+Path</button>
+    <button class="btn blue" onclick="test('intent://${domain}#Intent;scheme=https;package=com.android.chrome;end')">Chrome Intent</button>
+    <button class="btn blue" onclick="test('intent://${domain}#Intent;scheme=https;action=android.intent.action.VIEW;end')">VIEW Intent</button>
+  </div>
+</div>
+
+<div class="section">
+  <h2>🔮 EXPERIMENTAL</h2>
+  <div class="grid">
+    <button class="btn red" onclick="test('spotlight://${domain}')">Spotlight</button>
+    <button class="btn red" onclick="test('sms:&body=${encodeURIComponent(targetUrl)}')">SMS (view only)</button>
+    <button class="btn red" onclick="testBlob()">Blob URL</button>
+    <button class="btn red" onclick="testDataURI()">Data URI Redirect</button>
+  </div>
+  <button class="btn orange" onclick="testMeta()">Meta Refresh Redirect</button>
+  <button class="btn orange" onclick="testFormPost()">Form POST Redirect</button>
+</div>
+
+<div class="section">
+  <h2>⚡ AUTO SEQUENCES</h2>
+  <button class="btn green" onclick="autoSequenceV3()">🚀 Run ALL (Priority Order)</button>
+  <button class="btn" onclick="autoSafariOnly()">Safari Schemes Only</button>
+</div>
+
+<div class="section">
+  <h2>📊 Log</h2>
+  <div class="log" id="log"></div>
+</div>
+
+<p class="status">Escape Lab V3 | Target: ${domain}</p>
+
+<script>
+var escaped = false;
+var targetUrl = '${targetUrl}';
+var domain = '${domain}';
+var stripped = '${stripped}';
+
+function log(msg, type) {
+  var el = document.getElementById('log');
+  var entry = document.createElement('div');
+  entry.className = 'log-entry ' + (type || 'info');
+  var time = new Date().toLocaleTimeString();
+  entry.innerHTML = '<span style="color:#555">' + time + '</span> ' + msg;
+  el.insertBefore(entry, el.firstChild);
+}
+
+document.addEventListener('visibilitychange', function() {
+  if(document.hidden && !escaped) {
+    escaped = true;
+    log('✅ ESCAPED! Page hidden', 'critical');
+  }
+});
+
+function test(url) {
+  var scheme = url.split('://')[0];
+  log('Testing: ' + scheme + '...', 'warn');
+
+  var start = performance.now();
+  var localEscaped = false;
+
+  var handler = function() {
+    if(document.hidden && !localEscaped) {
+      localEscaped = true;
+      escaped = true;
+      var ms = (performance.now() - start).toFixed(0);
+      log('✅ ' + scheme + ' WORKED! (' + ms + 'ms)', 'critical');
+    }
+  };
+  document.addEventListener('visibilitychange', handler);
+
+  setTimeout(function() {
+    document.removeEventListener('visibilitychange', handler);
+    if(!localEscaped) {
+      log('❌ ' + scheme + ' - no escape', 'error');
+    }
+  }, 2500);
+
+  try {
+    location.href = url;
+  } catch(e) {
+    log('Error: ' + e.message, 'error');
+  }
+}
+
+function testShortcuts() {
+  // Uses Shortcuts x-callback-url with x-error fallback
+  // If shortcut doesn't exist, x-error opens as URL
+  var url = 'shortcuts://x-callback-url/run-shortcut?name=OpenSafari&x-error=' + encodeURIComponent(targetUrl);
+  log('Testing Shortcuts x-callback...', 'warn');
+  test(url);
+}
+
+function testShortcutsRandom() {
+  // Random UUID as shortcut name - guaranteed to fail, x-error should open
+  var randomName = 'SC_' + Math.random().toString(36).substr(2, 9);
+  var url = 'shortcuts://x-callback-url/run-shortcut?name=' + randomName + '&x-error=' + encodeURIComponent(targetUrl);
+  log('Testing random shortcut (' + randomName + ')...', 'warn');
+  test(url);
+}
+
+function testDownload() {
+  // Fetch endpoint that returns as downloadable file
+  log('Testing download redirect...', 'warn');
+  location.href = '/dlredirect?url=' + encodeURIComponent(targetUrl);
+}
+
+function testBlob() {
+  log('Testing Blob URL...', 'warn');
+  var html = '<html><head><meta http-equiv="refresh" content="0;url=' + targetUrl + '"></head></html>';
+  var blob = new Blob([html], {type: 'text/html'});
+  var blobUrl = URL.createObjectURL(blob);
+  test(blobUrl);
+}
+
+function testDataURI() {
+  log('Testing Data URI...', 'warn');
+  var html = '<html><head><meta http-equiv="refresh" content="0;url=' + targetUrl + '"></head></html>';
+  var dataUri = 'data:text/html;base64,' + btoa(html);
+  test(dataUri);
+}
+
+function testMeta() {
+  log('Testing meta refresh redirect...', 'warn');
+  location.href = '/metaredirect?url=' + encodeURIComponent(targetUrl);
+}
+
+function testFormPost() {
+  log('Testing form POST redirect...', 'warn');
+  var form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '/formredirect';
+  form.innerHTML = '<input type="hidden" name="url" value="' + targetUrl + '">';
+  document.body.appendChild(form);
+  form.submit();
+}
+
+function autoSequenceV3() {
+  log('🚀 Auto sequence V3 starting...', 'critical');
+  escaped = false;
+
+  var methods = [
+    // Tier 1: x-web-search variations (proven working!)
+    {url: 'x-web-search://?site:' + domain, delay: 0},
+    {url: 'x-web-search://' + domain, delay: 300},
+
+    // Tier 2: Shortcuts fallback trick
+    {url: 'shortcuts://x-callback-url/run-shortcut?name=X&x-error=' + encodeURIComponent(targetUrl), delay: 600},
+
+    // Tier 3: Safari schemes (might work on some accounts)
+    {url: 'x-safari-https://' + stripped, delay: 900},
+    {url: 'com-apple-mobilesafari-tab:' + targetUrl, delay: 1200},
+
+    // Tier 4: Chrome
+    {url: 'googlechrome://' + stripped, delay: 1500},
+
+    // Tier 5: Direct URL (last resort)
+    {url: targetUrl, delay: 1800}
+  ];
+
+  methods.forEach(function(m, i) {
+    setTimeout(function() {
+      if(!escaped) {
+        var scheme = m.url.split('://')[0];
+        log('Attempt ' + (i+1) + '/' + methods.length + ': ' + scheme, 'warn');
+        try { location.href = m.url; } catch(e) {}
+      }
+    }, m.delay);
+  });
+}
+
+function autoSafariOnly() {
+  log('Safari schemes sequence...', 'critical');
+  escaped = false;
+
+  var methods = [
+    {url: 'x-safari-https://' + stripped, delay: 0},
+    {url: 'x-safari-http://' + stripped, delay: 400},
+    {url: 'com-apple-mobilesafari-tab:' + targetUrl, delay: 800},
+    {url: 'com-apple-mobilesafari:' + targetUrl, delay: 1200}
+  ];
+
+  methods.forEach(function(m, i) {
+    setTimeout(function() {
+      if(!escaped) {
+        var scheme = m.url.split('://')[0];
+        log('Attempt ' + (i+1) + ': ' + scheme, 'warn');
+        try { location.href = m.url; } catch(e) {}
+      }
+    }, m.delay);
+  });
+}
+
+log('Escape Lab V3 initialized', 'ok');
+log('Target: ' + domain, 'info');
+</script>
+</body></html>`);
+});
+
+// ═══ DOWNLOAD REDIRECT TRICK ═══
+// Returns a file that redirects - might bypass in-app browser
+app.get('/dlredirect', (req, res) => {
+  const targetUrl = req.query.url || 'https://cmehere.net/mememe';
+
+  // Set headers to force download
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', 'attachment; filename="link.html"');
+
+  // HTML that redirects when opened
+  const html = `<!DOCTYPE html>
+<html><head>
+<meta http-equiv="refresh" content="0;url=${targetUrl}">
+<script>window.location.href="${targetUrl}";</script>
+</head><body>
+<p>Redirecting to <a href="${targetUrl}">${targetUrl}</a>...</p>
+</body></html>`;
+
+  res.send(html);
+});
+
+// ═══ META REFRESH REDIRECT ═══
+app.get('/metaredirect', (req, res) => {
+  const targetUrl = req.query.url || 'https://cmehere.net/mememe';
+
+  res.send(`<!DOCTYPE html>
+<html><head>
+<meta http-equiv="refresh" content="0;url=${targetUrl}">
+<meta name="referrer" content="no-referrer">
+</head><body>
+<script>
+// Multiple redirect attempts
+setTimeout(function() { window.location.replace("${targetUrl}"); }, 0);
+setTimeout(function() { window.location.href = "${targetUrl}"; }, 100);
+setTimeout(function() { document.location = "${targetUrl}"; }, 200);
+</script>
+<p>Redirecting...</p>
+</body></html>`);
+});
+
+// ═══ FORM POST REDIRECT ═══
+app.post('/formredirect', express.urlencoded({ extended: true }), (req, res) => {
+  const targetUrl = req.body.url || 'https://cmehere.net/mememe';
+  res.redirect(302, targetUrl);
 });
 
 // ═══ 404 HANDLER ═══
