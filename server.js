@@ -2036,7 +2036,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   </div>
 
   <script>
-    // In-app browser: Show landing page first, overlay only when clicking external links
+    // In-app browser: Show landing page first, overlay only when clicking links
     (function(){
       var isInApp=window.__IS_INAPP__;
       var isThreads=window.__IS_THREADS__;
@@ -2046,21 +2046,18 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
 
       var overlay=document.getElementById('inappOverlay');
 
-      // Intercept clicks on external links (OnlyFans, featured links, etc.)
+      // Intercept clicks on /go/ links (encrypted redirects to OnlyFans, etc.)
       document.addEventListener('click',function(e){
         var link=e.target.closest('a[href]');
         if(!link)return;
 
         var href=link.getAttribute('href');
-        // Only intercept external links (not internal navigation)
-        if(!href||href.startsWith('#')||href.startsWith('/'))return;
+        // Intercept /go/ links (encrypted external redirects)
+        if(!href||!href.startsWith('/go/'))return;
 
         // Block the click and show overlay
         e.preventDefault();
         e.stopPropagation();
-
-        // Store the target URL
-        window.__TARGET_URL__=href;
 
         // Change URL to include browser=1 so when Safari opens, it shows Screen 2
         try{
