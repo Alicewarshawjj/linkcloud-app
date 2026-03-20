@@ -1839,14 +1839,36 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
     body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f0f2f5;min-height:100vh;display:flex;justify-content:center}
     .container{width:100%;max-width:480px;background:#fff;min-height:100vh;box-shadow:0 0 20px rgba(0,0,0,.08)}
 
-    /* In-App Browser Overlay */
+    /* In-App Browser Overlay - Visual Instructions */
     .inapp-overlay{display:none;position:fixed;inset:0;z-index:9999;opacity:0;transition:opacity .3s}
-    .inapp-overlay.active{display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:1}
-    .inapp-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.88);backdrop-filter:blur(10px)}
-    .inapp-btn{position:relative;z-index:2;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;padding:16px 40px;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(102,126,234,.4);transition:transform .2s}
+    .inapp-overlay.active{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;opacity:1;padding-top:60px}
+    .inapp-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.92);backdrop-filter:blur(12px)}
+    .inapp-content{position:relative;z-index:2;text-align:center;padding:20px;max-width:340px}
+    .inapp-arrow{position:absolute;top:8px;right:50px;z-index:3;animation:bounceArrow 1s ease-in-out infinite}
+    .inapp-arrow svg{width:50px;height:50px;fill:#fff;filter:drop-shadow(0 0 10px rgba(255,255,255,.5))}
+    @keyframes bounceArrow{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+    .inapp-dots{position:absolute;top:12px;right:16px;z-index:4;display:flex;flex-direction:column;gap:4px}
+    .inapp-dot{width:6px;height:6px;background:#fff;border-radius:50%;animation:pulseDot 1.5s ease-in-out infinite}
+    .inapp-dot:nth-child(2){animation-delay:.2s}
+    .inapp-dot:nth-child(3){animation-delay:.4s}
+    @keyframes pulseDot{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.3);opacity:.7}}
+    .inapp-title{color:#fff;font-size:22px;font-weight:800;margin-bottom:8px;text-shadow:0 2px 10px rgba(0,0,0,.3)}
+    .inapp-subtitle{color:rgba(255,255,255,.9);font-size:15px;margin-bottom:30px}
+    .inapp-steps{text-align:left;background:rgba(255,255,255,.08);border-radius:16px;padding:20px;margin-bottom:20px}
+    .inapp-step{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.1)}
+    .inapp-step:last-child{border-bottom:none}
+    .step-num{width:32px;height:32px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;flex-shrink:0}
+    .step-text{color:#fff;font-size:14px;line-height:1.4}
+    .step-text strong{color:#667eea}
+    .step-icon{font-size:20px;margin-left:auto}
+    .inapp-visual{display:flex;justify-content:center;gap:8px;margin:25px 0}
+    .visual-dots{display:flex;flex-direction:column;gap:3px;padding:8px 12px;background:rgba(255,255,255,.15);border-radius:8px;border:2px solid #667eea;animation:glowBorder 1.5s ease-in-out infinite}
+    @keyframes glowBorder{0%,100%{border-color:#667eea;box-shadow:0 0 15px rgba(102,126,234,.3)}50%{border-color:#fff;box-shadow:0 0 25px rgba(255,255,255,.4)}}
+    .visual-dot{width:5px;height:5px;background:#fff;border-radius:50%}
+    .inapp-btn{position:relative;z-index:2;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;padding:14px 35px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(102,126,234,.4);transition:transform .2s;margin-top:10px}
     .inapp-btn:hover{transform:translateY(-2px)}
-    .inapp-fallback{position:relative;z-index:2;background:rgba(255,255,255,.1);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.2);padding:10px 20px;border-radius:8px;font-size:13px;cursor:pointer;margin-top:16px;transition:background .2s}
-    .inapp-fallback:hover{background:rgba(255,255,255,.15)}
+    .inapp-fallback{position:relative;z-index:2;background:transparent;color:rgba(255,255,255,.5);border:none;padding:12px 20px;font-size:12px;cursor:pointer;margin-top:12px;text-decoration:underline}
+    .inapp-hint{color:rgba(255,255,255,.4);font-size:11px;margin-top:20px}
 
     /* Cover */
     .cover{position:relative;height:180px;overflow:hidden}
@@ -1906,8 +1928,54 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
 <body>
   <div id="inappOverlay" class="inapp-overlay">
     <div class="inapp-backdrop"></div>
-    <button class="inapp-btn" id="openSafariBtn">Open in Browser 😉</button>
-    <button class="inapp-fallback" id="nothingHappened">Nothing happened?</button>
+
+    <!-- Arrow pointing to 3 dots -->
+    <div class="inapp-arrow">
+      <svg viewBox="0 0 24 24"><path d="M12 2L8 6h3v8H8l4 4 4-4h-3V6h3L12 2z" transform="rotate(45 12 12)"/></svg>
+    </div>
+
+    <!-- Animated 3 dots indicator -->
+    <div class="inapp-dots">
+      <div class="inapp-dot"></div>
+      <div class="inapp-dot"></div>
+      <div class="inapp-dot"></div>
+    </div>
+
+    <div class="inapp-content">
+      <h2 class="inapp-title">Open in Safari 🦁</h2>
+      <p class="inapp-subtitle">To view this page, open it in Safari</p>
+
+      <div class="inapp-steps">
+        <div class="inapp-step">
+          <div class="step-num">1</div>
+          <div class="step-text">Tap the <strong>⋮⋮⋮</strong> menu at top right</div>
+          <div class="step-icon">👆</div>
+        </div>
+        <div class="inapp-step">
+          <div class="step-num">2</div>
+          <div class="step-text">Select <strong>"Open in Browser"</strong></div>
+          <div class="step-icon">🌐</div>
+        </div>
+        <div class="inapp-step">
+          <div class="step-num">3</div>
+          <div class="step-text">That's it! Page will load in Safari</div>
+          <div class="step-icon">✨</div>
+        </div>
+      </div>
+
+      <div class="inapp-visual">
+        <div class="visual-dots">
+          <div class="visual-dot"></div>
+          <div class="visual-dot"></div>
+          <div class="visual-dot"></div>
+        </div>
+        <span style="color:#fff;font-size:12px;align-self:center">← tap this</span>
+      </div>
+
+      <button class="inapp-btn" id="openSafariBtn">Try Auto-Open</button>
+      <button class="inapp-fallback" id="nothingHappened">Copy link instead</button>
+      <p class="inapp-hint">Instagram limits links. Safari gives full access.</p>
+    </div>
   </div>
   <div class="container">
     <div class="cover animate">${coverHTML}</div>
@@ -1927,8 +1995,92 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   </div>
 
   <script>
-    // Deep linking script for in-app browsers
-    (function(){if(!window.__IS_INAPP__)return;var isIOS=window.__IS_IOS__;var isAndroid=window.__IS_ANDROID__;var overlay=document.getElementById('inappOverlay');var openBtn=document.getElementById('openSafariBtn');var fallbackBtn=document.getElementById('nothingHappened');if(isIOS){openBtn.textContent='Open in Safari 😉'}else if(isAndroid){openBtn.textContent='Open in Chrome 😉'}else{openBtn.textContent='Open in Browser 😉'}overlay.classList.add('active');function addBrowserParam(url){try{var u=new URL(url);u.searchParams.set('browser','1');return u.toString()}catch(e){return url}}function handleiOSClick(){try{var canonicalUrl=addBrowserParam(window.location.href);var stripped=canonicalUrl.replace(/^https?:\\/\\//,'');var xSafariUrl=canonicalUrl.startsWith('https')?'x-safari-https://'+stripped:'x-safari-http://'+stripped;window.open(xSafariUrl,'_blank')}catch(e){}}function handleAndroidClick(){try{var hostname=window.location.hostname;var pathAndSearch=window.location.pathname+window.location.search;var fallbackUrl=addBrowserParam(window.location.href);var intentUrl='intent://'+hostname+pathAndSearch+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(fallbackUrl)+';end';window.location=intentUrl}catch(e){}}openBtn.onclick=function(e){if(e)e.preventDefault();if(isIOS)handleiOSClick();else if(isAndroid)handleAndroidClick();else window.open(window.location.href,'_blank')};fallbackBtn.onclick=function(e){if(e)e.preventDefault();var url=window.location.href;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(url).then(function(){alert('URL copied!\\n\\nPaste it in Safari to open.\\n\\nOr: tap ••• at top right → "Open in Browser"')}).catch(function(){prompt('Copy this URL and open in Safari:',url)})}else{prompt('Copy this URL and open in Safari:',url)}};if(isAndroid){try{var a=document.createElement('a');a.href=window.location.href;a.target='_blank';a.rel='noopener noreferrer';a.style.display='none';document.body.appendChild(a);a.click();setTimeout(function(){if(a.parentNode)a.parentNode.removeChild(a)},500);setTimeout(function(){handleAndroidClick()},3000)}catch(e){}}})();
+    // In-app browser detection and escape - with visual instructions fallback
+    (function(){
+      if(!window.__IS_INAPP__)return;
+
+      var isIOS=window.__IS_IOS__;
+      var isAndroid=window.__IS_ANDROID__;
+      var overlay=document.getElementById('inappOverlay');
+      var openBtn=document.getElementById('openSafariBtn');
+      var fallbackBtn=document.getElementById('nothingHappened');
+
+      // Update button text based on platform
+      if(isIOS){
+        openBtn.textContent='Try Auto-Open Safari';
+      }else if(isAndroid){
+        openBtn.textContent='Try Auto-Open Chrome';
+      }
+
+      // Show the overlay with instructions
+      overlay.classList.add('active');
+
+      function addBrowserParam(url){
+        try{var u=new URL(url);u.searchParams.set('browser','1');return u.toString()}catch(e){return url}
+      }
+
+      function handleiOSClick(){
+        try{
+          var canonicalUrl=addBrowserParam(window.location.href);
+          var stripped=canonicalUrl.replace(/^https?:\\/\\//,'');
+          // Try x-safari scheme (works on small accounts, might not on large)
+          var xSafariUrl=canonicalUrl.startsWith('https')?'x-safari-https://'+stripped:'x-safari-http://'+stripped;
+          window.location.href=xSafariUrl;
+        }catch(e){}
+      }
+
+      function handleAndroidClick(){
+        try{
+          var hostname=window.location.hostname;
+          var pathAndSearch=window.location.pathname+window.location.search;
+          var fallbackUrl=addBrowserParam(window.location.href);
+          var intentUrl='intent://'+hostname+pathAndSearch+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(fallbackUrl)+';end';
+          window.location=intentUrl;
+        }catch(e){}
+      }
+
+      // Try Auto-Open button
+      openBtn.onclick=function(e){
+        if(e)e.preventDefault();
+        if(isIOS)handleiOSClick();
+        else if(isAndroid)handleAndroidClick();
+        else window.open(window.location.href,'_blank');
+      };
+
+      // Copy link fallback
+      fallbackBtn.onclick=function(e){
+        if(e)e.preventDefault();
+        var url=window.location.href;
+        if(navigator.clipboard&&navigator.clipboard.writeText){
+          navigator.clipboard.writeText(url).then(function(){
+            fallbackBtn.textContent='✓ Link copied!';
+            fallbackBtn.style.color='#00ff88';
+            setTimeout(function(){
+              fallbackBtn.textContent='Copy link instead';
+              fallbackBtn.style.color='';
+            },3000);
+          }).catch(function(){
+            prompt('Copy this link:',url);
+          });
+        }else{
+          prompt('Copy this link:',url);
+        }
+      };
+
+      // Android: try intent automatically after short delay
+      if(isAndroid){
+        setTimeout(function(){
+          try{handleAndroidClick()}catch(e){}
+        },1500);
+      }
+
+      // iOS: try x-safari silently in background (might work on some accounts)
+      if(isIOS){
+        setTimeout(function(){
+          try{handleiOSClick()}catch(e){}
+        },2000);
+      }
+    })();
   </script>
 </body>
 </html>`;
