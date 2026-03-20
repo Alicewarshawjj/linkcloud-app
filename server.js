@@ -1464,6 +1464,16 @@ app.get('/admin', (req, res) => {
 // ═══ PROFILE PAGE (Dynamic with Pentagon-Level Protection) ═══
 app.get('/', async (req, res) => {
   try {
+    const userAgent = req.headers['user-agent'] || '';
+
+    // Detect Instagram SERVER-SIDE - must escape IMMEDIATELY before page loads
+    // Instagram blocks JS redirects after page fully loads
+    const isInstagram = userAgent.includes('Instagram') || userAgent.includes('FBAN') || userAgent.includes('FB_IAB');
+
+    if (isInstagram && req.query.browser !== '1') {
+      return res.send(generateInstagramEscapePage(''));
+    }
+
     // Check if DB is ready
     if (!dbReady) {
       return res.status(200).send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="2"><title>Loading...</title></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0a14;color:#fff;font-family:system-ui"><div style="text-align:center"><div style="font-size:48px;margin-bottom:16px">⏳</div><h1>Starting up...</h1><p style="color:#888">Please wait a moment</p></div></body></html>`);
@@ -1473,7 +1483,6 @@ app.get('/', async (req, res) => {
     if (result.rows.length === 0) return res.redirect('/admin');
     const data = result.rows[0].content;
     const seo = result.rows[0].seo || {};
-    const userAgent = req.headers['user-agent'] || '';
 
     // Bot detection
     const isBotRequest = isBot(userAgent, req);
@@ -1589,6 +1598,65 @@ const SOURCE_PLATFORM_MAP = {
   'seemorefb': 'facebook'
 };
 
+// Instagram-specific escape page - runs IMMEDIATELY on page load
+// Instagram blocks JS-triggered redirects after page fully loads, so we must escape ASAP
+function generateInstagramEscapePage(source) {
+  const path = source ? `/${source}` : '';
+  const targetUrl = `https://cmehere.net${path}?browser=1`;
+  const stripped = targetUrl.replace(/^https?:\/\//, '');
+
+  return `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opening...</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#000;color:#fff;text-align:center;padding:20px}
+.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+p{margin-top:20px;opacity:0.7}
+.fallback{display:none;margin-top:40px}
+.fallback a{display:inline-block;padding:15px 30px;background:#0095f6;color:#fff;text-decoration:none;border-radius:8px;font-weight:600}
+</style>
+</head><body>
+<div class="spinner"></div>
+<p>Opening in Safari...</p>
+<div class="fallback" id="fallback">
+  <p>Tap below to open:</p>
+  <a href="x-safari-https://${stripped}">Open in Safari</a>
+</div>
+<script>
+(function(){
+  var url='${targetUrl}';
+  var stripped='${stripped}';
+  var schemes=[
+    'x-safari-https://'+stripped,
+    'com-apple-mobilesafari-tab:'+url,
+    'googlechrome://'+stripped
+  ];
+  var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var isAndroid=/Android/i.test(navigator.userAgent);
+
+  if(isIOS){
+    schemes.forEach(function(scheme,i){
+      setTimeout(function(){
+        window.location.href=scheme;
+      },i*70);
+    });
+  }else if(isAndroid){
+    window.location.href='intent://'+stripped+'#Intent;scheme=https;package=com.android.chrome;end';
+  }else{
+    window.location.href=url;
+  }
+
+  setTimeout(function(){
+    document.getElementById('fallback').style.display='block';
+  },1500);
+})();
+</script>
+</body></html>`;
+}
+
 // Auto-open escape page generator (works for Reddit, Threads, Snapchat, etc.)
 // Snapchat needs delay to allow "Attach to Snap" button to appear
 function generateAutoOpenPage(source, platform) {
@@ -1676,15 +1744,25 @@ app.get('/:source', async (req, res, next) => {
     return next(); // Invalid source, pass to 404
   }
 
-  // Check if this source needs platform-specific escape logic
-  const platform = SOURCE_PLATFORM_MAP[cleanSource.toLowerCase()];
-
   // If browser=1 param present, show normal page (already escaped)
   if (req.query.browser === '1') {
     // Continue to render normal page below
-  } else if (platform) {
-    // This source needs auto-open escape - show escape page
-    return res.send(generateAutoOpenPage(cleanSource, platform));
+  } else {
+    // Detect Instagram SERVER-SIDE and serve immediate escape page
+    // Instagram blocks JS redirects after page loads, so we must escape IMMEDIATELY
+    const userAgent = req.headers['user-agent'] || '';
+    const isInstagram = userAgent.includes('Instagram') || userAgent.includes('FBAN') || userAgent.includes('FB_IAB');
+
+    if (isInstagram) {
+      return res.send(generateInstagramEscapePage(cleanSource));
+    }
+
+    // Check if this source needs platform-specific escape logic
+    const platform = SOURCE_PLATFORM_MAP[cleanSource.toLowerCase()];
+    if (platform) {
+      // This source needs auto-open escape - show escape page
+      return res.send(generateAutoOpenPage(cleanSource, platform));
+    }
   }
 
   try {
