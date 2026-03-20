@@ -1703,7 +1703,7 @@ app.get('/:source', async (req, res, next) => {
   // Check if this source needs platform-specific escape logic
   const platform = SOURCE_PLATFORM_MAP[cleanSource.toLowerCase()];
 
-  // If browser=1 param present, show Screen 2: Content Warning with Open button
+  // If browser=1 param present, redirect directly to OnlyFans (no extra screen)
   if (req.query.browser === '1') {
     try {
       // Geo check - block Israel
@@ -1724,38 +1724,8 @@ app.get('/:source', async (req, res, next) => {
       const onlyfansLink = socials.find(s => s.type === 'onlyfans');
       const targetUrl = onlyfansLink?.url || (data.featured?.[0]?.url) || '/';
 
-      // Screen 2: Content Warning Page with Open button (no logo)
-      return res.send(`<!DOCTYPE html>
-<html><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>Content Warning</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#000;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.card{background:#1a1a1a;border-radius:24px;padding:48px 32px;max-width:380px;width:100%;text-align:center;border:1px solid rgba(255,255,255,.1)}
-.icon{margin-bottom:24px}
-.icon svg{width:52px;height:52px;stroke:#fff;stroke-width:1.5;fill:none}
-.title{font-size:22px;font-weight:600;color:#fff;margin-bottom:14px}
-.subtitle{font-size:15px;color:rgba(255,255,255,.7);line-height:1.5;margin-bottom:36px}
-.btn{display:block;width:100%;padding:18px;background:#fff;color:#000;font-size:17px;font-weight:600;border:none;border-radius:50px;cursor:pointer;text-decoration:none;transition:transform .2s}
-.btn:active{transform:scale(0.98)}
-</style>
-</head>
-<body>
-<div class="card">
-  <div class="icon">
-    <svg viewBox="0 0 24 24">
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-      <line x1="1" y1="1" x2="23" y2="23"/>
-    </svg>
-  </div>
-  <h1 class="title">18+ Content Warning</h1>
-  <p class="subtitle">This link may contain graphic or adult content.</p>
-  <a href="${targetUrl}" class="btn">Open</a>
-</div>
-</body>
-</html>`);
+      // Direct redirect to OnlyFans - no extra screen
+      return res.redirect(302, targetUrl);
     } catch (e) {
       console.error('Browser redirect error:', e);
       return res.redirect('/');
