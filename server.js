@@ -1885,6 +1885,13 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
     .inapp-step{color:rgba(255,255,255,.85);font-size:16px;line-height:1.6;margin-bottom:8px}
     .inapp-step:last-child{margin-bottom:0}
 
+    /* Threads-only tooltip (no overlay, just the hint) */
+    .threads-tooltip{display:none;position:fixed;top:12px;right:12px;z-index:9999;background:#fff;color:#000;padding:10px 14px;border-radius:12px;font-size:13px;font-weight:600;max-width:140px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.3);animation:threadsTooltipPulse 2s ease-in-out infinite}
+    .threads-tooltip.active{display:block}
+    .threads-tooltip::after{content:'';position:absolute;top:50%;right:-8px;transform:translateY(-50%);border:8px solid transparent;border-left-color:#fff}
+    .threads-tooltip .dots{font-weight:900;letter-spacing:2px}
+    @keyframes threadsTooltipPulse{0%,100%{transform:scale(1);box-shadow:0 4px 20px rgba(0,0,0,.3)}50%{transform:scale(1.05);box-shadow:0 6px 25px rgba(0,0,0,.4)}}
+
     /* Cover */
     .cover{position:relative;height:180px;overflow:hidden}
     .cover-img{width:100%;height:100%;object-fit:cover}
@@ -1973,6 +1980,12 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
       </div>
     </div>
   </div>
+
+  <!-- Threads-only tooltip (shown without overlay) -->
+  <div id="threadsTooltip" class="threads-tooltip">
+    Click <span class="dots">•••</span><br>to open in<br>external browser
+  </div>
+
   <div class="container">
     <div class="cover animate">${coverHTML}</div>
     <div class="avatar-section animate delay-1">
@@ -2047,6 +2060,21 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
       // Try auto-escape after 2 seconds (silent attempt) - except Threads
       if(!isThreads){
         setTimeout(tryAutoEscape,2000);
+      }
+    })();
+
+    // Threads-only: show tooltip without overlay
+    (function(){
+      if(!window.__IS_THREADS__)return;
+      var tooltip=document.getElementById('threadsTooltip');
+      if(tooltip){
+        tooltip.classList.add('active');
+        // Auto-hide after 8 seconds
+        setTimeout(function(){
+          tooltip.style.transition='opacity 0.5s';
+          tooltip.style.opacity='0';
+          setTimeout(function(){tooltip.classList.remove('active')},500);
+        },8000);
       }
     })();
   </script>
