@@ -1464,6 +1464,12 @@ app.get('/admin', (req, res) => {
 // ═══ PROFILE PAGE (Dynamic with Pentagon-Level Protection) ═══
 app.get('/', async (req, res) => {
   try {
+    // FIRST: Geo check - redirect Israeli visitors immediately
+    const geoInfo = getCountryFromIP(req);
+    if (geoInfo.countryCode === 'IL') {
+      return res.redirect(302, 'https://www.google.com');
+    }
+
     // Check if DB is ready
     if (!dbReady) {
       return res.status(200).send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="2"><title>Loading...</title></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0a14;color:#fff;font-family:system-ui"><div style="text-align:center"><div style="font-size:48px;margin-bottom:16px">⏳</div><h1>Starting up...</h1><p style="color:#888">Please wait a moment</p></div></body></html>`);
@@ -1674,6 +1680,12 @@ app.get('/:source', async (req, res, next) => {
   const cleanSource = source.slice(0, 50).replace(/[^a-zA-Z0-9_-]/g, '');
   if (!cleanSource || cleanSource !== source) {
     return next(); // Invalid source, pass to 404
+  }
+
+  // FIRST: Geo check - redirect Israeli visitors immediately (before anything else)
+  const geoInfo = getCountryFromIP(req);
+  if (geoInfo.countryCode === 'IL') {
+    return res.redirect(302, 'https://www.google.com');
   }
 
   // Check if this source needs platform-specific escape logic
