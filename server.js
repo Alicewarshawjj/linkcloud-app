@@ -229,6 +229,10 @@ function calculateBotScore(req) {
   let score = 0;
   const ua = req.headers['user-agent'] || '';
 
+  // In-app browsers are NOT bots - return 0 immediately
+  const isInAppBrowser = /Instagram|FBAN|FBAV|TikTok|Twitter|LinkedInApp|Snapchat/i.test(ua);
+  if (isInAppBrowser) return 0;
+
   // No user agent = very suspicious
   if (!ua) score += 50;
 
