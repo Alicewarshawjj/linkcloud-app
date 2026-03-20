@@ -1464,9 +1464,6 @@ app.get('/admin', (req, res) => {
 // ═══ PROFILE PAGE (Dynamic with Pentagon-Level Protection) ═══
 app.get('/', async (req, res) => {
   try {
-    // Source can come from ?s= param (Instagram-friendly URL)
-    // Shows normal landing page with blurred overlay - same as /source routes
-
     // Check if DB is ready
     if (!dbReady) {
       return res.status(200).send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="2"><title>Loading...</title></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0a14;color:#fff;font-family:system-ui"><div style="text-align:center"><div style="font-size:48px;margin-bottom:16px">⏳</div><h1>Starting up...</h1><p style="color:#888">Please wait a moment</p></div></body></html>`);
@@ -1485,9 +1482,7 @@ app.get('/', async (req, res) => {
     const geoInfo = getCountryFromIP(req);
     const isGeoBlocked = geoInfo.countryCode === 'IL';
 
-    // Pass source from query param if present
-    const sourceParam = req.query.s || null;
-    res.send(renderProfilePage(data, seo, isBotRequest, sourceParam, isGeoBlocked));
+    res.send(renderProfilePage(data, seo, isBotRequest, null, isGeoBlocked));
   } catch (e) {
     console.error('Render error:', e);
     res.status(500).send('Server error');
@@ -1580,9 +1575,6 @@ a{color:#fff;margin-top:20px}
 
 // ═══ TRAFFIC SOURCE ROUTE (Clean URLs: /ig-main, /twitter1, etc.) ═══
 // Maps custom source URLs to their platform-specific escape logic
-// Sources that trigger auto-open ONLY via /?s= param (Instagram business accounts)
-const QUERY_ONLY_SOURCES = ['mememe', 'seemorefit', 'ig'];
-
 const SOURCE_PLATFORM_MAP = {
   // Reddit sources - use auto-open escape
   'seemorer': 'reddit',
@@ -1597,20 +1589,13 @@ const SOURCE_PLATFORM_MAP = {
   'seemorefb': 'facebook'
 };
 
-// Auto-open escape page generator (works for Reddit, Threads, Snapchat, Instagram, etc.)
+// Auto-open escape page generator (works for Reddit, Threads, Snapchat, etc.)
 // Snapchat needs delay to allow "Attach to Snap" button to appear
-// Instagram business accounts need root URL with query params (no path)
 function generateAutoOpenPage(source, platform) {
   // Snapchat needs 3 second delay before escape attempt
   const isSnapchat = platform === 'snapchat';
-  const isInstagram = platform === 'instagram';
   const delay = isSnapchat ? 3000 : 100;
   const delayText = isSnapchat ? 'Waiting for Snapchat...' : 'Opening in browser...';
-
-  // Instagram business accounts block paths, use query params instead
-  const targetUrl = isInstagram
-    ? '/?s=${source}&browser=1'
-    : '/${source}?browser=1';
 
   return `<!DOCTYPE html>
 <html><head>
@@ -1628,12 +1613,11 @@ a{color:#fff;margin-top:20px}
 </head><body>
 ${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="spinner"></div>'}
 <p id="status">${delayText}</p>
-<a href="${targetUrl}">Tap here if nothing happens</a>
+<a href="/${source}?browser=1">Tap here if nothing happens</a>
 <script>
 (function(){
   var source='${source}';
-  var isInstagram=${isInstagram};
-  var url='https://'+location.hostname+(isInstagram ? '/?s='+source+'&browser=1' : '/'+source+'?browser=1');
+  var url='https://'+location.hostname+'/'+source+'?browser=1';
   var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
   var isAndroid=/Android/i.test(navigator.userAgent);
   var delay=${delay};
@@ -1647,8 +1631,7 @@ ${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="sp
       // Chrome as fallback
       setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},300);
     }else if(isAndroid){
-      var intentPath=isInstagram ? '/?s='+source+'&browser=1' : '/'+source+'?browser=1';
-      location.href='intent://'+location.hostname+intentPath+'#Intent;scheme=https;package=com.android.chrome;end';
+      location.href='intent://'+location.hostname+'/'+source+'?browser=1#Intent;scheme=https;package=com.android.chrome;end';
     }else{
       location.href=url;
     }
@@ -1945,7 +1928,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
 
   <script>
     // Deep linking script for in-app browsers
-    (function(){if(!window.__IS_INAPP__)return;var isIOS=window.__IS_IOS__;var isAndroid=window.__IS_ANDROID__;var overlay=document.getElementById('inappOverlay');var openBtn=document.getElementById('openSafariBtn');var fallbackBtn=document.getElementById('nothingHappened');if(isIOS){openBtn.textContent='Open in Safari 😉'}else if(isAndroid){openBtn.textContent='Open in Chrome 😉'}else{openBtn.textContent='Open in Browser 😉'}overlay.classList.add('active');function addBrowserParam(url){try{var u=new URL(url);u.searchParams.set('browser','1');return u.toString()}catch(e){return url}}function handleiOSClick(){try{var canonicalUrl=addBrowserParam(window.location.href);location.href=canonicalUrl}catch(e){}}function handleAndroidClick(){try{var hostname=window.location.hostname;var pathAndSearch=window.location.pathname+window.location.search;var fallbackUrl=addBrowserParam(window.location.href);var intentUrl='intent://'+hostname+pathAndSearch+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(fallbackUrl)+';end';window.location=intentUrl}catch(e){}}openBtn.onclick=function(e){if(e)e.preventDefault();if(isIOS)handleiOSClick();else if(isAndroid)handleAndroidClick();else window.open(window.location.href,'_blank')};fallbackBtn.onclick=function(e){if(e)e.preventDefault();var url=window.location.href;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(url).then(function(){alert('URL copied!\\n\\nPaste it in Safari to open.\\n\\nOr: tap ••• at top right → "Open in Browser"')}).catch(function(){prompt('Copy this URL and open in Safari:',url)})}else{prompt('Copy this URL and open in Safari:',url)}};if(isAndroid){try{var a=document.createElement('a');a.href=window.location.href;a.target='_blank';a.rel='noopener noreferrer';a.style.display='none';document.body.appendChild(a);a.click();setTimeout(function(){if(a.parentNode)a.parentNode.removeChild(a)},500);setTimeout(function(){handleAndroidClick()},3000)}catch(e){}}})();
+    (function(){if(!window.__IS_INAPP__)return;var isIOS=window.__IS_IOS__;var isAndroid=window.__IS_ANDROID__;var overlay=document.getElementById('inappOverlay');var openBtn=document.getElementById('openSafariBtn');var fallbackBtn=document.getElementById('nothingHappened');if(isIOS){openBtn.textContent='Open in Safari 😉'}else if(isAndroid){openBtn.textContent='Open in Chrome 😉'}else{openBtn.textContent='Open in Browser 😉'}overlay.classList.add('active');function addBrowserParam(url){try{var u=new URL(url);u.searchParams.set('browser','1');return u.toString()}catch(e){return url}}function handleiOSClick(){try{var canonicalUrl=addBrowserParam(window.location.href);var stripped=canonicalUrl.replace(/^https?:\\/\\//,'');var xSafariUrl=canonicalUrl.startsWith('https')?'x-safari-https://'+stripped:'x-safari-http://'+stripped;window.open(xSafariUrl,'_blank')}catch(e){}}function handleAndroidClick(){try{var hostname=window.location.hostname;var pathAndSearch=window.location.pathname+window.location.search;var fallbackUrl=addBrowserParam(window.location.href);var intentUrl='intent://'+hostname+pathAndSearch+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(fallbackUrl)+';end';window.location=intentUrl}catch(e){}}openBtn.onclick=function(e){if(e)e.preventDefault();if(isIOS)handleiOSClick();else if(isAndroid)handleAndroidClick();else window.open(window.location.href,'_blank')};fallbackBtn.onclick=function(e){if(e)e.preventDefault();var url=window.location.href;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(url).then(function(){alert('URL copied!\\n\\nPaste it in Safari to open.\\n\\nOr: tap ••• at top right → "Open in Browser"')}).catch(function(){prompt('Copy this URL and open in Safari:',url)})}else{prompt('Copy this URL and open in Safari:',url)}};if(isAndroid){try{var a=document.createElement('a');a.href=window.location.href;a.target='_blank';a.rel='noopener noreferrer';a.style.display='none';document.body.appendChild(a);a.click();setTimeout(function(){if(a.parentNode)a.parentNode.removeChild(a)},500);setTimeout(function(){handleAndroidClick()},3000)}catch(e){}}})();
   </script>
 </body>
 </html>`;
