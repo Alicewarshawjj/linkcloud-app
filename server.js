@@ -1662,7 +1662,7 @@ ${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="sp
 
 app.get('/:source', async (req, res, next) => {
   // Skip if it's a known route
-  const knownRoutes = ['admin', 'go', 'api', 'favicon.ico', 'robots.txt', 'debug', 'health', 'xtest'];
+  const knownRoutes = ['admin', 'go', 'api', 'favicon.ico', 'robots.txt', 'debug', 'health', 'xtest', 'igescape', 'igopen'];
   const source = req.params.source;
 
   // Check if it looks like a file or known route
@@ -3121,6 +3121,14 @@ button.success{background:linear-gradient(135deg,#00ff88,#00aa55);color:#000}
 </div>
 
 <div class="section">
+<h2>🍎 SAFARI DIRECT SCHEMES (NEW!)</h2>
+<button class="success" onclick="test('com-apple-mobilesafari-tab:${targetUrl}')">com-apple-mobilesafari-tab: (DIRECT!)</button>
+<button class="success" onclick="test('com-apple-mobilesafari-tab://${targetUrl}')">com-apple-mobilesafari-tab://</button>
+<button class="success" onclick="test('mobilesafari://${targetUrl}')">mobilesafari://</button>
+<button class="success" onclick="test('mobilesafari-tab://${targetUrl}')">mobilesafari-tab://</button>
+</div>
+
+<div class="section">
 <h2>🔍 Spotlight Search Variations</h2>
 <button class="alt" onclick="test('spotlight://${domain}')">spotlight://${domain}</button>
 <button class="alt" onclick="test('spotlight-search://${domain}')">spotlight-search://${domain}</button>
@@ -3277,6 +3285,137 @@ function testSmartEscape() {
 
 log('X-Web-Search Lab initialized', 'ok');
 log('Target: ${domain}', 'info');
+</script>
+</body></html>`);
+});
+
+// ═══ INSTAGRAM ESCAPE V2 - Using x-web-search discovery ═══
+// Auto-escape page that uses x-web-search:// which works on large accounts
+app.get('/igescape', (req, res) => {
+  const targetUrl = req.query.url || 'https://cmehere.net/mememe';
+  const domain = new URL(targetUrl).hostname;
+  const stripped = targetUrl.replace(/^https?:\/\//, '');
+
+  res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opening in Safari...</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,system-ui,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#fff;border-radius:20px;padding:40px;text-align:center;max-width:350px;box-shadow:0 20px 60px rgba(0,0,0,0.3)}
+h1{font-size:48px;margin-bottom:15px}
+h2{color:#333;font-size:18px;margin-bottom:10px}
+p{color:#666;font-size:14px;margin-bottom:20px}
+.spinner{width:50px;height:50px;border:4px solid #eee;border-top:4px solid #667eea;border-radius:50%;animation:spin 1s linear infinite;margin:20px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn{display:block;width:100%;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;padding:15px;font-size:16px;border-radius:10px;cursor:pointer;margin-top:15px;font-weight:600;text-decoration:none}
+.btn:active{transform:scale(0.98)}
+.secondary{background:#f0f0f0;color:#333}
+.status{font-size:12px;color:#999;margin-top:15px}
+#method{font-weight:bold;color:#667eea}
+</style>
+</head><body>
+<div class="card">
+<h1>🚀</h1>
+<h2>Opening in Safari...</h2>
+<div class="spinner" id="spinner"></div>
+<p>If nothing happens, tap the button below:</p>
+
+<a class="btn" id="mainBtn" href="x-web-search://?${domain}">Open in Safari</a>
+
+<a class="btn secondary" href="${targetUrl}">Continue in Browser</a>
+
+<p class="status">Method: <span id="method">auto-detecting...</span></p>
+</div>
+
+<script>
+var escaped = false;
+var targetUrl = '${targetUrl}';
+var domain = '${domain}';
+var stripped = '${stripped}';
+
+// Visibility change detection
+document.addEventListener('visibilitychange', function() {
+  if(document.hidden) escaped = true;
+});
+
+// Auto-escape sequence
+(function() {
+  var methods = [
+    // Priority 1: x-web-search (proven to work!)
+    {name: 'x-web-search', url: 'x-web-search://?site:' + domain, delay: 100},
+    // Priority 2: Safari direct schemes
+    {name: 'mobilesafari-tab', url: 'com-apple-mobilesafari-tab:' + targetUrl, delay: 400},
+    // Priority 3: x-safari (might work)
+    {name: 'x-safari-https', url: 'x-safari-https://' + stripped, delay: 700},
+    // Priority 4: Chrome fallback
+    {name: 'googlechrome', url: 'googlechrome://' + stripped, delay: 1000}
+  ];
+
+  methods.forEach(function(m) {
+    setTimeout(function() {
+      if(!escaped) {
+        document.getElementById('method').textContent = m.name;
+        try { location.href = m.url; } catch(e) {}
+      }
+    }, m.delay);
+  });
+
+  // Update UI if escaped
+  setTimeout(function() {
+    if(escaped) {
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('method').textContent = 'Success!';
+    }
+  }, 1500);
+})();
+</script>
+</body></html>`);
+});
+
+// ═══ SMART INSTAGRAM REDIRECT ═══
+// Main redirect endpoint that detects Instagram and uses the best escape method
+app.get('/igopen', (req, res) => {
+  const targetUrl = req.query.url || 'https://cmehere.net/mememe';
+  const ua = req.headers['user-agent'] || '';
+  const isInstagram = /Instagram|FBAN|FB_IAB/.test(ua);
+  const isIOS = /iPhone|iPad|iPod/.test(ua);
+
+  // If not Instagram, just redirect
+  if (!isInstagram) {
+    return res.redirect(302, targetUrl);
+  }
+
+  // If Instagram on iOS, use escape page
+  if (isIOS) {
+    return res.redirect(302, '/igescape?url=' + encodeURIComponent(targetUrl));
+  }
+
+  // Android fallback - try intent
+  const domain = new URL(targetUrl).hostname;
+  res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opening...</title>
+<style>
+body{font-family:system-ui;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center}
+.card{padding:40px}
+.btn{display:block;background:#0095f6;color:#fff;padding:15px 30px;border-radius:8px;text-decoration:none;margin-top:20px}
+</style>
+</head><body>
+<div class="card">
+<h1>📱</h1>
+<p>Opening in browser...</p>
+<a class="btn" href="intent://${domain}#Intent;scheme=https;package=com.android.chrome;end">Open in Chrome</a>
+<a class="btn" href="${targetUrl}">Continue</a>
+</div>
+<script>
+setTimeout(function(){
+  location.href = 'intent://${domain}#Intent;scheme=https;package=com.android.chrome;end';
+}, 100);
 </script>
 </body></html>`);
 });
