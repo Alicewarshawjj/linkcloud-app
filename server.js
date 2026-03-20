@@ -1662,7 +1662,7 @@ ${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="sp
 
 app.get('/:source', async (req, res, next) => {
   // Skip if it's a known route
-  const knownRoutes = ['admin', 'go', 'api', 'favicon.ico', 'robots.txt', 'debug', 'health'];
+  const knownRoutes = ['admin', 'go', 'api', 'favicon.ico', 'robots.txt', 'debug', 'health', 'xtest'];
   const source = req.params.source;
 
   // Check if it looks like a file or known route
@@ -3067,6 +3067,216 @@ function runNetworkAnalysis(){
 log('ULTRA DEBUG v2.0 initialized', 'ok');
 log('Request ID: ' + requestId, 'info');
 log('Run tests from the tabs above', 'info');
+</script>
+</body></html>`);
+});
+
+// ═══ X-WEB-SEARCH ESCAPE TEST PAGE ═══
+// Based on discovery that x-web-search:// works on large Instagram accounts
+app.get('/xtest', (req, res) => {
+  const targetUrl = req.query.url || 'https://cmehere.net/mememe';
+  const domain = new URL(targetUrl).hostname;
+
+  res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🔬 X-Web-Search Escape Lab</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0f;color:#fff;padding:20px;min-height:100vh}
+h1{color:#ff00ff;text-align:center;margin-bottom:20px}
+.info{background:#111;padding:15px;border-radius:8px;margin-bottom:20px;border:1px solid #333}
+.target{color:#00ff88;word-break:break-all}
+.section{margin:20px 0}
+h2{color:#00ffff;margin-bottom:10px;font-size:16px}
+button{display:block;width:100%;background:linear-gradient(135deg,#ff00ff,#8800aa);color:#fff;border:none;padding:15px;margin:8px 0;font-size:14px;cursor:pointer;border-radius:8px;font-weight:bold}
+button:active{transform:scale(0.98)}
+button.alt{background:linear-gradient(135deg,#00ffff,#0088aa);color:#000}
+button.success{background:linear-gradient(135deg,#00ff88,#00aa55);color:#000}
+#log{background:#000;padding:15px;border-radius:8px;margin-top:20px;font-family:monospace;font-size:11px;max-height:300px;overflow-y:auto}
+.log-entry{padding:5px 0;border-bottom:1px solid #222}
+.ok{color:#00ff88}
+.error{color:#ff4444}
+.warn{color:#ffff00}
+.critical{color:#ff00ff}
+</style>
+</head><body>
+<h1>🔬 X-Web-Search Lab</h1>
+
+<div class="info">
+<p><strong>Discovery:</strong> x-web-search:// escapes Instagram's in-app browser on large accounts!</p>
+<p style="margin-top:10px"><strong>Target URL:</strong> <span class="target">${targetUrl}</span></p>
+<p style="margin-top:5px"><strong>Domain:</strong> <span class="target">${domain}</span></p>
+</div>
+
+<div class="section">
+<h2>🎯 Primary Tests (x-web-search variations)</h2>
+<button onclick="test('x-web-search://?${domain}')">x-web-search://?${domain}</button>
+<button onclick="test('x-web-search://${domain}')">x-web-search://${domain}</button>
+<button onclick="test('x-web-search://?site:${domain}')">x-web-search://?site:${domain}</button>
+<button onclick="test('x-web-search://?${targetUrl}')">x-web-search://?[full URL]</button>
+<button onclick="test('x-web-search://?q=${domain}')">x-web-search://?q=${domain}</button>
+<button onclick="test('x-web-search://?query=${domain}')">x-web-search://?query=${domain}</button>
+</div>
+
+<div class="section">
+<h2>🔍 Spotlight Search Variations</h2>
+<button class="alt" onclick="test('spotlight://${domain}')">spotlight://${domain}</button>
+<button class="alt" onclick="test('spotlight-search://${domain}')">spotlight-search://${domain}</button>
+<button class="alt" onclick="test('apple-search://${domain}')">apple-search://${domain}</button>
+</div>
+
+<div class="section">
+<h2>📱 Other System Schemes</h2>
+<button class="alt" onclick="test('shortcuts://run-shortcut?name=OpenURL&input=${encodeURIComponent(targetUrl)}')">shortcuts:// (if configured)</button>
+<button class="alt" onclick="test('workflow://run-workflow?name=OpenURL&input=${encodeURIComponent(targetUrl)}')">workflow:// (legacy)</button>
+<button class="alt" onclick="test('apple-magnifier://')">apple-magnifier://</button>
+</div>
+
+<div class="section">
+<h2>🌐 Direct URL Tests</h2>
+<button class="success" onclick="test('${targetUrl}')">Direct HTTPS (${domain})</button>
+<button class="success" onclick="testOpen('${targetUrl}')">window.open HTTPS</button>
+<button class="success" onclick="testAnchor('${targetUrl}')">Anchor click HTTPS</button>
+</div>
+
+<div class="section">
+<h2>⚡ Combined Strategies</h2>
+<button onclick="testCombined()">🚀 TRY ALL (staggered 200ms)</button>
+<button onclick="testSmartEscape()">🧠 SMART ESCAPE (best first)</button>
+</div>
+
+<div id="log"></div>
+
+<script>
+var escaped = false;
+
+function log(msg, type) {
+  type = type || 'info';
+  var colors = {ok:'#00ff88', error:'#ff4444', warn:'#ffff00', info:'#00ffff', critical:'#ff00ff'};
+  var logDiv = document.getElementById('log');
+  var time = new Date().toLocaleTimeString();
+  logDiv.innerHTML = '<div class="log-entry" style="color:'+colors[type]+'">['+time+'] '+msg+'</div>' + logDiv.innerHTML;
+}
+
+function test(url) {
+  var scheme = url.split('://')[0];
+  log('Testing: ' + scheme + '://', 'warn');
+
+  var startTime = performance.now();
+
+  // Visibility change detection
+  var visHandler = function() {
+    if(document.hidden && !escaped) {
+      escaped = true;
+      var elapsed = (performance.now() - startTime).toFixed(0);
+      log('✅ ESCAPE via ' + scheme + '! (' + elapsed + 'ms)', 'critical');
+    }
+  };
+  document.addEventListener('visibilitychange', visHandler);
+
+  // Timeout cleanup
+  setTimeout(function() {
+    document.removeEventListener('visibilitychange', visHandler);
+    if(!escaped) {
+      log('❌ No escape: ' + scheme, 'error');
+    }
+  }, 3000);
+
+  // Execute
+  try {
+    location.href = url;
+    log('Executed: ' + scheme, 'info');
+  } catch(e) {
+    log('Error: ' + e.message, 'error');
+  }
+}
+
+function testOpen(url) {
+  log('Testing window.open...', 'warn');
+  try {
+    var w = window.open(url, '_blank');
+    log('window.open returned: ' + (w ? 'window' : 'null'), w ? 'ok' : 'error');
+  } catch(e) {
+    log('Error: ' + e.message, 'error');
+  }
+}
+
+function testAnchor(url) {
+  log('Testing anchor click...', 'warn');
+  var a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  log('Anchor clicked', 'info');
+}
+
+function testCombined() {
+  log('🚀 Starting combined test...', 'critical');
+  var schemes = [
+    'x-web-search://?${domain}',
+    'x-web-search://${domain}',
+    'x-web-search://?site:${domain}',
+    'spotlight://${domain}',
+    '${targetUrl}'
+  ];
+
+  schemes.forEach(function(scheme, i) {
+    setTimeout(function() {
+      if(!escaped) {
+        var name = scheme.split('://')[0];
+        log('Attempt ' + (i+1) + ': ' + name, 'warn');
+        try { location.href = scheme; } catch(e) {}
+      }
+    }, i * 200);
+  });
+}
+
+function testSmartEscape() {
+  log('🧠 Smart escape starting...', 'critical');
+
+  // Based on our discovery, x-web-search works!
+  // Try it first, then fallback to direct URL
+
+  var startTime = performance.now();
+  escaped = false;
+
+  var visHandler = function() {
+    if(document.hidden && !escaped) {
+      escaped = true;
+      var elapsed = (performance.now() - startTime).toFixed(0);
+      log('✅ ESCAPED! (' + elapsed + 'ms)', 'critical');
+    }
+  };
+  document.addEventListener('visibilitychange', visHandler);
+
+  // Strategy: Try x-web-search first
+  log('Step 1: x-web-search...', 'info');
+  location.href = 'x-web-search://?${domain}';
+
+  // If that doesn't work after 1.5s, try direct
+  setTimeout(function() {
+    if(!escaped) {
+      log('Step 2: Direct URL...', 'info');
+      location.href = '${targetUrl}';
+    }
+  }, 1500);
+
+  // Cleanup
+  setTimeout(function() {
+    document.removeEventListener('visibilitychange', visHandler);
+    if(!escaped) {
+      log('All attempts failed', 'error');
+    }
+  }, 5000);
+}
+
+log('X-Web-Search Lab initialized', 'ok');
+log('Target: ${domain}', 'info');
 </script>
 </body></html>`);
 });
