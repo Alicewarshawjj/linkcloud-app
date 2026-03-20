@@ -1682,6 +1682,13 @@ app.get('/:source', async (req, res, next) => {
   // If browser=1 param present, redirect directly to OnlyFans (or primary link)
   if (req.query.browser === '1') {
     try {
+      // Geo check - block Israel from direct redirect
+      const geoInfo = getCountryFromIP(req);
+      if (geoInfo.countryCode === 'IL') {
+        // Israeli visitors get redirected to safe page
+        return res.redirect(302, 'https://www.google.com');
+      }
+
       if (!dbReady) {
         return res.redirect('/');
       }
