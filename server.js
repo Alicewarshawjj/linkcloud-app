@@ -3121,6 +3121,16 @@ button.success{background:linear-gradient(135deg,#00ff88,#00aa55);color:#000}
 </div>
 
 <div class="section">
+<h2>🔥 OPTIMIZED SEARCH QUERIES (Try These!)</h2>
+<button onclick="test('x-web-search://?${domain} I\\'m Feeling Lucky')">+ "I'm Feeling Lucky"</button>
+<button onclick="test('x-web-search://?${targetUrl}')">Full URL as search</button>
+<button onclick="test('x-web-search://?"${domain}"')">Domain in quotes</button>
+<button onclick="test('x-web-search://?inurl:${domain}')">inurl:${domain}</button>
+<button onclick="test('x-web-search://?${domain} official')">+ "official"</button>
+<button onclick="test('x-web-search://?open ${targetUrl}')">open + URL</button>
+</div>
+
+<div class="section">
 <h2>🍎 SAFARI DIRECT SCHEMES (NEW!)</h2>
 <button class="success" onclick="test('com-apple-mobilesafari-tab:${targetUrl}')">com-apple-mobilesafari-tab: (DIRECT!)</button>
 <button class="success" onclick="test('com-apple-mobilesafari-tab://${targetUrl}')">com-apple-mobilesafari-tab://</button>
