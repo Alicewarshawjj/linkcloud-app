@@ -1484,11 +1484,8 @@ app.get('/', async (req, res) => {
     // Bot detection
     const isBotRequest = isBot(userAgent, req);
 
-    // Geo check - block exclusive content for Israel
-    const geoInfo = getCountryFromIP(req);
-    const isGeoBlocked = geoInfo.countryCode === 'IL';
-
-    res.send(renderProfilePage(data, seo, isBotRequest, null, isGeoBlocked));
+    // Note: Israeli visitors already redirected at start of route
+    res.send(renderProfilePage(data, seo, isBotRequest, null, false));
   } catch (e) {
     console.error('Render error:', e);
     res.status(500).send('Server error');
