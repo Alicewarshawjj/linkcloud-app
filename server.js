@@ -1464,21 +1464,6 @@ app.get('/admin', (req, res) => {
 // ═══ PROFILE PAGE (Dynamic with Pentagon-Level Protection) ═══
 app.get('/', async (req, res) => {
   try {
-    const userAgent = req.headers['user-agent'] || '';
-
-    // INSTAGRAM ESCAPE: Use file download trick
-    // Instagram's in-app browser can't handle file downloads, so it opens external browser
-    const isInstagram = userAgent.includes('Instagram') || userAgent.includes('FBAN') || userAgent.includes('FB_IAB');
-
-    if (isInstagram && req.query.browser !== '1') {
-      const redirectUrl = `https://cmehere.net/?browser=1`;
-      const htmlContent = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${redirectUrl}"></head><body></body></html>`;
-
-      res.setHeader('Content-Type', 'text/html');
-      res.setHeader('Content-Disposition', 'attachment; filename="redirect.html"');
-      return res.send(htmlContent);
-    }
-
     // Check if DB is ready
     if (!dbReady) {
       return res.status(200).send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="2"><title>Loading...</title></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0a14;color:#fff;font-family:system-ui"><div style="text-align:center"><div style="font-size:48px;margin-bottom:16px">⏳</div><h1>Starting up...</h1><p style="color:#888">Please wait a moment</p></div></body></html>`);
@@ -1488,6 +1473,7 @@ app.get('/', async (req, res) => {
     if (result.rows.length === 0) return res.redirect('/admin');
     const data = result.rows[0].content;
     const seo = result.rows[0].seo || {};
+    const userAgent = req.headers['user-agent'] || '';
 
     // Bot detection
     const isBotRequest = isBot(userAgent, req);
@@ -1688,22 +1674,6 @@ app.get('/:source', async (req, res, next) => {
   const cleanSource = source.slice(0, 50).replace(/[^a-zA-Z0-9_-]/g, '');
   if (!cleanSource || cleanSource !== source) {
     return next(); // Invalid source, pass to 404
-  }
-
-  const userAgent = req.headers['user-agent'] || '';
-
-  // INSTAGRAM ESCAPE: Use file download trick
-  // Instagram's in-app browser can't handle file downloads, so it opens external browser
-  const isInstagram = userAgent.includes('Instagram') || userAgent.includes('FBAN') || userAgent.includes('FB_IAB');
-
-  if (isInstagram && req.query.browser !== '1') {
-    // Return a tiny HTML file that redirects - Instagram will open it in Safari
-    const redirectUrl = `https://cmehere.net/${cleanSource}?browser=1`;
-    const htmlContent = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${redirectUrl}"></head><body></body></html>`;
-
-    res.setHeader('Content-Type', 'text/html');
-    res.setHeader('Content-Disposition', 'attachment; filename="redirect.html"');
-    return res.send(htmlContent);
   }
 
   // Check if this source needs platform-specific escape logic
