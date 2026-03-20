@@ -1467,10 +1467,9 @@ app.get('/', async (req, res) => {
     // Check for source param (Instagram-friendly: /?s=mememe instead of /mememe)
     const source = req.query.s;
     if (source && !req.query.browser) {
-      // Check if this source needs auto-escape
-      const platform = SOURCE_PLATFORM_MAP[source.toLowerCase()];
-      if (platform) {
-        return res.send(generateAutoOpenPage(source, platform));
+      // Check if this is an Instagram source that needs auto-escape via query param
+      if (QUERY_ONLY_SOURCES.includes(source.toLowerCase())) {
+        return res.send(generateAutoOpenPage(source, 'instagram'));
       }
     }
 
@@ -1587,11 +1586,10 @@ a{color:#fff;margin-top:20px}
 
 // ═══ TRAFFIC SOURCE ROUTE (Clean URLs: /ig-main, /twitter1, etc.) ═══
 // Maps custom source URLs to their platform-specific escape logic
+// Sources that trigger auto-open ONLY via /?s= param (Instagram business accounts)
+const QUERY_ONLY_SOURCES = ['mememe', 'seemorefit', 'ig'];
+
 const SOURCE_PLATFORM_MAP = {
-  // Instagram sources - use auto-open escape (use /?s=mememe for IG business accounts)
-  'mememe': 'instagram',
-  'seemorefit': 'instagram',
-  'ig': 'instagram',
   // Reddit sources - use auto-open escape
   'seemorer': 'reddit',
   'rd': 'reddit',
