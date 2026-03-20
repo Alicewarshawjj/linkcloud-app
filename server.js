@@ -1250,11 +1250,22 @@ app.get('/vip-access', (req, res) => {
   res.redirect(301, 'https://example.com/members-only');
 });
 
-// Route 3: Generic link pattern (catches scrapers following /link/*)
+// Route 3: /link/:id - redirect to /:id (for backwards compatibility)
+// Also serves as honeypot for clearly fake IDs
 app.get('/link/:id', (req, res) => {
+  const id = req.params.id;
   const ua = req.headers['user-agent'] || 'unknown';
   const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '';
-  recordHoneypotHit(ip, ua, `/link/${req.params.id}`);
+
+  // If it looks like a real short ID (alphanumeric, reasonable length), redirect
+  if (/^[a-zA-Z0-9_-]{1,30}$/.test(id)) {
+    // Pass query params along (like browser=1)
+    const query = req.query.browser ? `?browser=${req.query.browser}` : '';
+    return res.redirect(302, `/${id}${query}`);
+  }
+
+  // Otherwise it's a honeypot hit
+  recordHoneypotHit(ip, ua, `/link/${id}`);
   res.redirect(301, 'https://example.com/not-found');
 });
 
