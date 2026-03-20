@@ -3121,21 +3121,25 @@ button.success{background:linear-gradient(135deg,#00ff88,#00aa55);color:#000}
 </div>
 
 <div class="section">
-<h2>🔥 OPTIMIZED SEARCH QUERIES (Try These!)</h2>
+<h2>🦆 DUCKDUCKGO DIRECT (TRY FIRST!)</h2>
+<p style="color:#ff0;margin-bottom:10px;font-size:12px">DDG backslash goes DIRECTLY to first result!</p>
+<button class="success" onclick="testDDG('${domain}')">DDG \\${domain} (DIRECT!)</button>
+<button class="success" onclick="testDDG('site:${domain}')">DDG \\site:${domain}</button>
+<button class="success" onclick="test('ddgQuickLink://%5C${domain}')">DDG App Scheme</button>
+</div>
+
+<div class="section">
+<h2>🔥 OPTIMIZED SEARCH QUERIES</h2>
 <button onclick="test('x-web-search://?${domain} I\\'m Feeling Lucky')">+ "I'm Feeling Lucky"</button>
 <button onclick="test('x-web-search://?${targetUrl}')">Full URL as search</button>
 <button onclick="test('x-web-search://?"${domain}"')">Domain in quotes</button>
 <button onclick="test('x-web-search://?inurl:${domain}')">inurl:${domain}</button>
-<button onclick="test('x-web-search://?${domain} official')">+ "official"</button>
-<button onclick="test('x-web-search://?open ${targetUrl}')">open + URL</button>
 </div>
 
 <div class="section">
-<h2>🍎 SAFARI DIRECT SCHEMES (NEW!)</h2>
-<button class="success" onclick="test('com-apple-mobilesafari-tab:${targetUrl}')">com-apple-mobilesafari-tab: (DIRECT!)</button>
-<button class="success" onclick="test('com-apple-mobilesafari-tab://${targetUrl}')">com-apple-mobilesafari-tab://</button>
-<button class="success" onclick="test('mobilesafari://${targetUrl}')">mobilesafari://</button>
-<button class="success" onclick="test('mobilesafari-tab://${targetUrl}')">mobilesafari-tab://</button>
+<h2>🍎 SAFARI DIRECT SCHEMES</h2>
+<button onclick="test('com-apple-mobilesafari-tab:${targetUrl}')">com-apple-mobilesafari-tab:</button>
+<button onclick="test('mobilesafari://${targetUrl}')">mobilesafari://</button>
 </div>
 
 <div class="section">
@@ -3216,6 +3220,34 @@ function testOpen(url) {
   try {
     var w = window.open(url, '_blank');
     log('window.open returned: ' + (w ? 'window' : 'null'), w ? 'ok' : 'error');
+  } catch(e) {
+    log('Error: ' + e.message, 'error');
+  }
+}
+
+function testDDG(query) {
+  // DuckDuckGo's backslash feature goes directly to first result
+  var ddgUrl = 'https://duckduckgo.com/?q=' + encodeURIComponent('\\\\' + query);
+  log('Testing DDG direct: \\\\' + query, 'critical');
+
+  var startTime = performance.now();
+
+  var visHandler = function() {
+    if(document.hidden && !escaped) {
+      escaped = true;
+      var elapsed = (performance.now() - startTime).toFixed(0);
+      log('✅ DDG ESCAPE! (' + elapsed + 'ms)', 'critical');
+    }
+  };
+  document.addEventListener('visibilitychange', visHandler);
+
+  setTimeout(function() {
+    document.removeEventListener('visibilitychange', visHandler);
+  }, 5000);
+
+  try {
+    location.href = ddgUrl;
+    log('DDG URL opened', 'info');
   } catch(e) {
     log('Error: ' + e.message, 'error');
   }
