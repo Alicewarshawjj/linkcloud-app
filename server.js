@@ -1576,10 +1576,6 @@ a{color:#fff;margin-top:20px}
 // ═══ TRAFFIC SOURCE ROUTE (Clean URLs: /ig-main, /twitter1, etc.) ═══
 // Maps custom source URLs to their platform-specific escape logic
 const SOURCE_PLATFORM_MAP = {
-  // Instagram sources - use auto-open escape (same as threads/reddit)
-  'mememe': 'instagram',
-  'seemorefit': 'instagram',
-  'ig': 'instagram',
   // Reddit sources - use auto-open escape
   'seemorer': 'reddit',
   'rd': 'reddit',
