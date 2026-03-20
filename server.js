@@ -2034,9 +2034,8 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
       <h1 class="profile-name">${esc(p.name || '')}</h1>
       ${p.bio ? `<p class="profile-bio">${esc(p.bio)}</p>` : ''}
     </div>
-    <div class="socials animate delay-3">${socialsHTML}</div>
-    ${feats.length ? `<div class="animate delay-4"><div class="section-title">Featured Links</div>${featsHTML}</div>` : ''}
-    ${cars.length ? `<div class="animate delay-5"><div class="section-title" style="margin-top:8px">Featured Content</div><div class="carousel">${carsHTML}</div></div>` : ''}
+    ${feats.length ? `<div class="animate delay-3"><div class="section-title">Featured Links</div>${featsHTML}</div>` : ''}
+    ${cars.length ? `<div class="animate delay-4"><div class="section-title" style="margin-top:8px">Featured Content</div><div class="carousel">${carsHTML}</div></div>` : ''}
   </div>
 
   <script>
