@@ -1914,69 +1914,62 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   </script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f0f2f5;min-height:100vh;display:flex;justify-content:center}
-    .container{width:100%;max-width:480px;background:#fff;min-height:100vh;box-shadow:0 0 20px rgba(0,0,0,.08)}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#000;min-height:100vh;display:flex;justify-content:center;align-items:flex-start}
+    .container{width:100%;max-width:480px;background:#0a0a0f;min-height:100vh;padding-bottom:40px}
 
     /* Screen 1: In-App Browser Full Overlay - NO ESCAPE */
-    .inapp-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,.85)}
+    .inapp-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,.92)}
     .inapp-overlay.active{display:flex;flex-direction:column;align-items:center;justify-content:center}
-    .inapp-backdrop{position:absolute;top:0;left:0;right:0;bottom:0;backdrop-filter:blur(25px);-webkit-backdrop-filter:blur(25px)}
-    .inapp-x{position:fixed;top:48px;left:16px;z-index:10000;width:28px;height:28px;stroke:#888;stroke-width:2;fill:none;opacity:.6}
+    .inapp-backdrop{position:absolute;top:0;left:0;right:0;bottom:0;backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px)}
+    .inapp-x{position:fixed;top:48px;left:16px;z-index:10000;width:28px;height:28px;stroke:#666;stroke-width:2;fill:none}
     .inapp-tooltip{position:fixed;top:48px;right:50px;z-index:10000;background:#fff;color:#000;padding:10px 12px;border-radius:10px;font-size:11px;font-weight:600;line-height:1.3;text-align:right;box-shadow:0 4px 20px rgba(0,0,0,.5)}
     .inapp-tooltip::after{content:'';position:absolute;top:50%;right:-8px;transform:translateY(-50%);border:8px solid transparent;border-left-color:#fff}
     .inapp-tooltip .dots{font-weight:900;letter-spacing:1px}
     .inapp-content{position:relative;z-index:10001;text-align:center;padding:0 32px;color:#fff}
     .inapp-icon{margin-bottom:20px}
-    .inapp-icon svg{width:52px;height:52px;stroke:#fff;stroke-width:1.5;fill:none}
+    .inapp-icon svg{width:48px;height:48px;stroke:#fff;stroke-width:1.5;fill:none}
     .inapp-title{font-size:22px;font-weight:600;margin-bottom:12px;color:#fff}
-    .inapp-subtitle{font-size:15px;color:rgba(255,255,255,.7);line-height:1.5;margin-bottom:36px}
+    .inapp-subtitle{font-size:15px;color:rgba(255,255,255,.6);line-height:1.5;margin-bottom:36px}
     .inapp-instructions{text-align:left;max-width:300px;margin:0 auto}
     .inapp-instructions-title{font-size:15px;font-weight:700;color:#fff;margin-bottom:14px}
-    .inapp-step{font-size:14px;color:rgba(255,255,255,.85);margin-bottom:8px;padding-left:4px}
+    .inapp-step{font-size:14px;color:rgba(255,255,255,.8);margin-bottom:8px;padding-left:4px}
 
     /* Cover */
-    .cover{position:relative;height:180px;overflow:hidden}
+    .cover{position:relative;height:200px;overflow:hidden}
     .cover-img{width:100%;height:100%;object-fit:cover}
-    .cover-gradient{width:100%;height:100%;background:linear-gradient(135deg,#667eea,#764ba2)}
+    .cover-gradient{width:100%;height:100%;background:linear-gradient(135deg,#1a1a2e,#16213e)}
 
     /* Avatar */
-    .avatar-section{display:flex;flex-direction:column;align-items:center;margin-top:-55px;position:relative;z-index:2}
+    .avatar-section{display:flex;flex-direction:column;align-items:center;margin-top:-60px;position:relative;z-index:2}
     .avatar-wrapper{position:relative}
-    .avatar-img,.avatar-placeholder{width:110px;height:110px;border-radius:50%;border:4px solid #fff;box-shadow:0 4px 15px rgba(0,0,0,.15);object-fit:cover}
+    .avatar-img,.avatar-placeholder{width:120px;height:120px;border-radius:50%;border:4px solid #1a1a1a;box-shadow:0 8px 30px rgba(0,0,0,.5);object-fit:cover}
     .avatar-placeholder{background:linear-gradient(135deg,#667eea,#764ba2)}
-    .verified-badge{position:absolute;bottom:4px;right:4px;width:28px;height:28px;background:#1DA1F2;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #fff}
+    .verified-badge{position:absolute;bottom:6px;right:6px;width:28px;height:28px;background:#1DA1F2;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #1a1a1a}
 
     /* Profile Info */
-    .profile-info{text-align:center;padding:16px 24px 0}
-    .profile-name{font-size:24px;font-weight:800;color:#1a1a2e;letter-spacing:.5px}
-    .profile-bio{color:#666;font-size:14px;margin-top:8px;line-height:1.5}
-
-    /* Social Icons */
-    .socials{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;padding:24px 16px}
-    .social-link{text-decoration:none}
-    .social-icon{width:55px;height:55px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:transform .2s,box-shadow .2s;cursor:pointer}
-    .social-icon:hover{transform:scale(1.1);box-shadow:0 4px 15px rgba(0,0,0,.2)}
-    .social-icon svg{width:24px;height:24px}
+    .profile-info{text-align:center;padding:20px 24px 0}
+    .profile-name{font-size:26px;font-weight:700;color:#fff;letter-spacing:.3px}
+    .profile-bio{color:rgba(255,255,255,.6);font-size:14px;margin-top:10px;line-height:1.5}
 
     /* Featured Links */
-    .section-title{color:#667eea;text-align:center;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:8px 0 16px}
+    .section-title{color:rgba(255,255,255,.5);text-align:center;font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;padding:24px 0 16px}
     .feat-link{text-decoration:none;display:block;margin:0 16px 16px;cursor:pointer}
-    .feat-card-display{height:200px;border-radius:16px;overflow:hidden;position:relative;transition:transform .2s}
+    .feat-card-display{height:200px;border-radius:20px;overflow:hidden;position:relative;transition:transform .2s;border:1px solid rgba(255,255,255,.1)}
     .feat-card-display:hover{transform:scale(1.02)}
-    .feat-overlay{position:absolute;bottom:0;left:0;right:0;height:80px;background:linear-gradient(to top,rgba(0,0,0,.65),transparent);display:flex;align-items:flex-end;padding:14px}
+    .feat-overlay{position:absolute;bottom:0;left:0;right:0;height:80px;background:linear-gradient(to top,rgba(0,0,0,.8),transparent);display:flex;align-items:flex-end;padding:16px}
     .feat-icon{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-right:12px;flex-shrink:0}
-    .feat-title{color:#fff;font-weight:700;font-size:15px}
+    .feat-title{color:#fff;font-weight:600;font-size:15px}
 
     /* Carousel */
-    .carousel{display:flex;gap:12px;overflow-x:auto;padding:0 16px 16px;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory}
+    .carousel{display:flex;gap:14px;overflow-x:auto;padding:0 16px 24px;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory}
     .carousel::-webkit-scrollbar{display:none}
     .car-link{text-decoration:none;flex-shrink:0;scroll-snap-align:start;cursor:pointer}
-    .car-card{width:200px;height:200px;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;transition:transform .2s}
+    .car-card{width:180px;height:180px;border-radius:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;transition:transform .2s;border:1px solid rgba(255,255,255,.1)}
     .car-card:hover{transform:scale(1.03)}
     .car-icon{margin-bottom:12px}
-    .car-icon svg{width:40px;height:40px;fill:#fff}
-    .car-title{color:#fff;font-weight:700;font-size:15px;text-align:center}
-    .car-sub{color:rgba(255,255,255,.8);font-size:12px;text-align:center;margin-top:4px}
+    .car-icon svg{width:36px;height:36px;fill:#fff}
+    .car-title{color:#fff;font-weight:600;font-size:14px;text-align:center}
+    .car-sub{color:rgba(255,255,255,.5);font-size:11px;text-align:center;margin-top:4px}
 
     /* Animations */
     @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
