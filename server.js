@@ -1101,6 +1101,105 @@ app.get('/api/debug-ua', (req, res) => {
   });
 });
 
+// ═══ DEBUG: Test escape methods (access from Instagram to test) ═══
+app.get('/debug-escape', (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Escape Method Tester</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#111;color:#fff;padding:20px}
+h1{font-size:18px;margin-bottom:20px;text-align:center}
+.info{background:#222;padding:15px;border-radius:8px;margin-bottom:20px;font-size:12px;word-break:break-all}
+.btn{display:block;width:100%;padding:15px;margin:10px 0;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;text-align:center;text-decoration:none}
+.btn-primary{background:#0095f6;color:#fff}
+.btn-secondary{background:#333;color:#fff}
+.result{background:#222;padding:10px;margin-top:10px;border-radius:8px;font-size:12px;display:none}
+.success{border:2px solid #0f0}
+.fail{border:2px solid #f00}
+</style>
+</head><body>
+<h1>🔧 Instagram Escape Tester</h1>
+
+<div class="info" id="info">Loading...</div>
+
+<button class="btn btn-primary" onclick="testMethod('x-safari-https')">1. x-safari-https://</button>
+<div class="result" id="result1"></div>
+
+<button class="btn btn-primary" onclick="testMethod('googlechrome')">2. googlechrome://</button>
+<div class="result" id="result2"></div>
+
+<button class="btn btn-primary" onclick="testMethod('window-open')">3. window.open(_blank)</button>
+<div class="result" id="result3"></div>
+
+<button class="btn btn-primary" onclick="testMethod('location-href')">4. location.href (direct)</button>
+<div class="result" id="result4"></div>
+
+<button class="btn btn-primary" onclick="testMethod('anchor-click')">5. Anchor click simulation</button>
+<div class="result" id="result5"></div>
+
+<button class="btn btn-primary" onclick="testMethod('meta-refresh')">6. Meta refresh redirect</button>
+<div class="result" id="result6"></div>
+
+<button class="btn btn-secondary" onclick="copyUA()">Copy User Agent</button>
+
+<script>
+var ua = navigator.userAgent;
+var isIOS = /iPhone|iPad|iPod/i.test(ua);
+var isInstagram = ua.indexOf('Instagram') !== -1;
+var targetUrl = 'https://cmehere.net/?browser=1&test=1';
+
+document.getElementById('info').innerHTML =
+  '<b>User Agent:</b><br>' + ua + '<br><br>' +
+  '<b>iOS:</b> ' + isIOS + '<br>' +
+  '<b>Instagram:</b> ' + isInstagram;
+
+function testMethod(method) {
+  var stripped = targetUrl.replace(/^https?:\\/\\//, '');
+
+  switch(method) {
+    case 'x-safari-https':
+      location.href = 'x-safari-https://' + stripped;
+      break;
+    case 'googlechrome':
+      location.href = 'googlechrome://' + stripped;
+      break;
+    case 'window-open':
+      window.open(targetUrl, '_blank');
+      break;
+    case 'location-href':
+      location.href = targetUrl;
+      break;
+    case 'anchor-click':
+      var a = document.createElement('a');
+      a.href = targetUrl;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      break;
+    case 'meta-refresh':
+      var meta = document.createElement('meta');
+      meta.httpEquiv = 'refresh';
+      meta.content = '0;url=' + targetUrl;
+      document.head.appendChild(meta);
+      break;
+  }
+}
+
+function copyUA() {
+  navigator.clipboard.writeText(ua).then(function() {
+    alert('Copied!');
+  }).catch(function() {
+    prompt('Copy:', ua);
+  });
+}
+</script>
+</body></html>`);
+});
+
 // ═══ DEBUG: Check analytics table ═══
 app.get('/api/analytics/debug', requireAuth, async (req, res) => {
   try {
