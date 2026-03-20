@@ -1688,13 +1688,12 @@ app.get('/:source', async (req, res, next) => {
   // Check if this source needs platform-specific escape logic
   const platform = SOURCE_PLATFORM_MAP[cleanSource.toLowerCase()];
 
-  // If browser=1 param present, redirect directly to OnlyFans (or primary link)
+  // If browser=1 param present, show Screen 2: Content Warning with Open button
   if (req.query.browser === '1') {
     try {
-      // Geo check - block Israel from direct redirect
+      // Geo check - block Israel
       const geoInfo = getCountryFromIP(req);
       if (geoInfo.countryCode === 'IL') {
-        // Israeli visitors get redirected to safe page
         return res.redirect(302, 'https://www.google.com');
       }
 
@@ -1708,19 +1707,43 @@ app.get('/:source', async (req, res, next) => {
 
       // Find OnlyFans link (primary destination)
       const onlyfansLink = socials.find(s => s.type === 'onlyfans');
-      if (onlyfansLink && onlyfansLink.url) {
-        // Direct redirect to OnlyFans - skip landing page!
-        return res.redirect(302, onlyfansLink.url);
-      }
+      const targetUrl = onlyfansLink?.url || (data.featured?.[0]?.url) || '/';
 
-      // Fallback: if no OnlyFans, try first featured link
-      const featured = data.featured || data.feats || [];
-      if (featured.length > 0 && featured[0].url) {
-        return res.redirect(302, featured[0].url);
-      }
-
-      // Last fallback: show landing page
-      return res.redirect('/');
+      // Screen 2: Content Warning Page with Open button
+      return res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Content Warning</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#000;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#1a1a1a;border-radius:24px;padding:40px 32px;max-width:380px;width:100%;text-align:center;border:1px solid #333}
+.logo{font-size:32px;font-weight:300;color:#fff;margin-bottom:28px;letter-spacing:-1px}
+.logo span{font-weight:700}
+.icon{margin-bottom:20px}
+.icon svg{width:56px;height:56px;stroke:#fff;stroke-width:1.5;fill:none}
+.title{font-size:24px;font-weight:600;color:#fff;margin-bottom:12px}
+.subtitle{font-size:15px;color:#999;line-height:1.5;margin-bottom:32px}
+.btn{display:block;width:100%;padding:18px;background:#fff;color:#000;font-size:17px;font-weight:600;border:none;border-radius:50px;cursor:pointer;text-decoration:none;transition:transform .2s,box-shadow .2s}
+.btn:active{transform:scale(0.98)}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">Link<span>me</span></div>
+  <div class="icon">
+    <svg viewBox="0 0 24 24">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  </div>
+  <h1 class="title">18+ Content Warning</h1>
+  <p class="subtitle">This link may contain graphic or adult content.</p>
+  <a href="${targetUrl}" class="btn">Open</a>
+</div>
+</body>
+</html>`);
     } catch (e) {
       console.error('Browser redirect error:', e);
       return res.redirect('/');
@@ -1882,12 +1905,22 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
     body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f0f2f5;min-height:100vh;display:flex;justify-content:center}
     .container{width:100%;max-width:480px;background:#fff;min-height:100vh;box-shadow:0 0 20px rgba(0,0,0,.08)}
 
-    /* In-App Browser - Tooltip Only (no overlay, full page visible) */
-    .inapp-tooltip{display:none;position:fixed;top:12px;right:60px;z-index:9999;background:#fff;color:#000;padding:12px 16px;border-radius:14px;font-size:13px;font-weight:600;line-height:1.4;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.25);animation:tooltipPulse 2s ease-in-out infinite}
-    .inapp-tooltip.active{display:block}
+    /* Screen 1: In-App Browser Full Overlay - NO ESCAPE */
+    .inapp-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,.92)}
+    .inapp-overlay.active{display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .inapp-backdrop{position:absolute;top:0;left:0;right:0;bottom:0;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+    .inapp-tooltip{position:fixed;top:12px;right:60px;z-index:10000;background:#fff;color:#000;padding:10px 14px;border-radius:12px;font-size:12px;font-weight:600;line-height:1.3;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.4);animation:tooltipPulse 2s ease-in-out infinite}
     .inapp-tooltip::after{content:'';position:absolute;top:50%;right:-10px;transform:translateY(-50%);border:10px solid transparent;border-left-color:#fff}
     .inapp-tooltip .dots{font-weight:900;letter-spacing:1px}
-    @keyframes tooltipPulse{0%,100%{transform:scale(1);box-shadow:0 4px 24px rgba(0,0,0,.25)}50%{transform:scale(1.03);box-shadow:0 6px 28px rgba(0,0,0,.35)}}
+    @keyframes tooltipPulse{0%,100%{transform:scale(1);box-shadow:0 4px 20px rgba(0,0,0,.4)}50%{transform:scale(1.05);box-shadow:0 6px 25px rgba(0,0,0,.5)}}
+    .inapp-content{position:relative;z-index:10001;text-align:center;padding:0 40px;color:#fff}
+    .inapp-icon{margin-bottom:24px}
+    .inapp-icon svg{width:64px;height:64px;stroke:#fff;stroke-width:1.5;fill:none}
+    .inapp-title{font-size:26px;font-weight:700;margin-bottom:12px;color:#fff}
+    .inapp-subtitle{font-size:16px;color:rgba(255,255,255,.8);line-height:1.5;margin-bottom:40px}
+    .inapp-instructions{text-align:left;max-width:320px;margin:0 auto}
+    .inapp-instructions-title{font-size:16px;font-weight:700;color:#fff;margin-bottom:16px}
+    .inapp-step{font-size:15px;color:rgba(255,255,255,.9);margin-bottom:10px;padding-left:8px}
 
     /* Cover */
     .cover{position:relative;height:180px;overflow:hidden}
@@ -1945,9 +1978,33 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   </style>
 </head>
 <body>
-  <!-- In-App Browser Tooltip (Instagram, TikTok, Twitter, Threads) -->
-  <div id="inappTooltip" class="inapp-tooltip">
-    Click <span class="dots">•••</span><br>to open in<br>external browser
+  <!-- Screen 1: In-App Browser Full Overlay - NO ESCAPE -->
+  <div id="inappOverlay" class="inapp-overlay">
+    <div class="inapp-backdrop"></div>
+
+    <!-- Tooltip pointing to ••• -->
+    <div class="inapp-tooltip">
+      Click <span class="dots">•••</span><br>to open in<br>external browser
+    </div>
+
+    <div class="inapp-content">
+      <!-- Eye with slash icon -->
+      <div class="inapp-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+          <line x1="1" y1="1" x2="23" y2="23"/>
+        </svg>
+      </div>
+
+      <h2 class="inapp-title">18+ Content Warning</h2>
+      <p class="inapp-subtitle">This link may contain<br>graphic or adult content.</p>
+
+      <div class="inapp-instructions">
+        <p class="inapp-instructions-title">To visit this link</p>
+        <p class="inapp-step">1. Tap the three dots on the top right.</p>
+        <p class="inapp-step">2. Select "Open in external browser"</p>
+      </div>
+    </div>
   </div>
 
   <div class="container">
@@ -1968,7 +2025,8 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   </div>
 
   <script>
-    // In-app browser detection - show tooltip only (full page visible)
+    // Screen 1: In-app browser - show full overlay, NO ESCAPE
+    // User MUST click ••• and open in external browser
     (function(){
       var isInApp=window.__IS_INAPP__;
       var isThreads=window.__IS_THREADS__;
@@ -1976,12 +2034,10 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
       // Exit if not in-app browser
       if(!isInApp && !isThreads)return;
 
-      var isIOS=window.__IS_IOS__;
-      var isAndroid=window.__IS_ANDROID__;
-      var tooltip=document.getElementById('inappTooltip');
+      var overlay=document.getElementById('inappOverlay');
 
       // IMPORTANT: Change URL to include browser=1 BEFORE user clicks "Open in external browser"
-      // This way, when Instagram opens Safari, it will redirect directly to OnlyFans
+      // When they open in Safari, server will show Screen 2 (content warning with Open button)
       try{
         var url=new URL(window.location.href);
         if(!url.searchParams.has('browser')){
@@ -1990,44 +2046,12 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
         }
       }catch(e){}
 
-      // Show the tooltip
-      if(tooltip){
-        tooltip.classList.add('active');
-        // Auto-hide after 10 seconds
-        setTimeout(function(){
-          tooltip.style.transition='opacity 0.5s';
-          tooltip.style.opacity='0';
-          setTimeout(function(){tooltip.classList.remove('active')},500);
-        },10000);
+      // Show the overlay - NO CLOSE BUTTON, NO ESCAPE
+      if(overlay){
+        overlay.classList.add('active');
       }
 
-      // Try auto-escape silently in background
-      // NOTE: Threads (Meta) blocks x-safari-https:// causing white screen
-      // So for Threads we only show tooltip, no auto-escape attempt
-      function tryAutoEscape(){
-        if(isThreads)return; // Don't try auto-escape for Threads - causes white screen
-        try{
-          var url=new URL(window.location.href);
-          url.searchParams.set('browser','1');
-          var newUrl=url.toString();
-          var stripped=newUrl.replace(/^https?:\\/\\//,'');
-
-          if(isIOS){
-            var xSafariUrl='x-safari-https://'+stripped;
-            window.location.href=xSafariUrl;
-          }else if(isAndroid){
-            var hostname=url.hostname;
-            var pathAndSearch=url.pathname+url.search;
-            var intentUrl='intent://'+hostname+pathAndSearch+'#Intent;scheme=https;package=com.android.chrome;end';
-            window.location=intentUrl;
-          }
-        }catch(e){}
-      }
-
-      // Try auto-escape after 2 seconds (silent attempt) - except Threads
-      if(!isThreads && isInApp){
-        setTimeout(tryAutoEscape,2000);
-      }
+      // NO auto-escape attempts - user must manually click ••• menu
     })();
   </script>
 </body>
