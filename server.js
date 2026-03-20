@@ -1586,14 +1586,20 @@ const SOURCE_PLATFORM_MAP = {
   'sc': 'snapchat',
   // Facebook sources - use auto-open escape
   'fb': 'facebook',
-  'seemorefb': 'facebook'
+  'seemorefb': 'facebook',
+  // Instagram sources - use juicy.bio escape technique
+  'mememe': 'instagram',
+  'seemorefit': 'instagram',
+  'ig': 'instagram'
 };
 
-// Auto-open escape page generator (works for Reddit, Threads, Snapchat, etc.)
+// Auto-open escape page generator (works for Reddit, Threads, Snapchat, Instagram, etc.)
 // Snapchat needs delay to allow "Attach to Snap" button to appear
+// Instagram uses juicy.bio technique with window.open() instead of location.href
 function generateAutoOpenPage(source, platform) {
   // Snapchat needs 3 second delay before escape attempt
   const isSnapchat = platform === 'snapchat';
+  const isInstagram = platform === 'instagram';
   const delay = isSnapchat ? 3000 : 100;
   const delayText = isSnapchat ? 'Waiting for Snapchat...' : 'Opening in browser...';
 
@@ -1607,29 +1613,68 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-d
 .spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 p{margin-top:20px;opacity:0.7}
-a{color:#fff;margin-top:20px}
+a{color:#fff;margin-top:20px;padding:15px 30px;background:#333;border-radius:8px;text-decoration:none}
 .countdown{font-size:24px;margin-bottom:10px;font-weight:bold}
 </style>
 </head><body>
 ${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="spinner"></div>'}
 <p id="status">${delayText}</p>
-<a href="/${source}?browser=1">Tap here if nothing happens</a>
+<a href="/${source}?browser=1" id="fallback">Tap here if nothing happens</a>
 <script>
 (function(){
   var source='${source}';
   var url='https://'+location.hostname+'/'+source+'?browser=1';
-  var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
-  var isAndroid=/Android/i.test(navigator.userAgent);
+  var stripped=url.replace(/^https?:\\/\\//i,'');
+  var ua=navigator.userAgent||'';
+  var isIOS=/(iPad|iPhone|iPod)/.test(ua)||(/(Macintosh)/.test(ua)&&'ontouchend' in document);
+  var isAndroid=/Android/i.test(ua);
   var delay=${delay};
   var isSnapchat=${isSnapchat};
+  var isInstagram=${isInstagram};
+
+  // juicy.bio technique: check if still in in-app browser
+  function isInAppBrowser(){
+    var r=!!(window.webkit&&window.webkit.messageHandlers);
+    return/(FB_IAB|FBAN|FBAV|FBIOS|Instagram|TikTok|BytedanceWebview|Snapchat|Twitter|Line\\/\\d)/i.test(ua)||r;
+  }
+
+  // juicy.bio technique: window.open instead of location.href
+  function tryOpen(scheme){
+    try{
+      var w=window.open(scheme,'_blank');
+      return w!==null;
+    }catch(e){return false;}
+  }
 
   function doEscape(){
     document.getElementById('status').textContent='Opening in browser...';
+
     if(isIOS){
-      // Safari FIRST (user likely logged into OnlyFans in Safari)
-      setTimeout(function(){location.href='x-safari-https://'+url.replace(/^https?:\\/\\//,'')},100);
-      // Chrome as fallback
-      setTimeout(function(){location.href='googlechrome://'+url.replace(/^https?:\\/\\//,'')},300);
+      if(isInstagram && isInAppBrowser()){
+        // juicy.bio technique: window.open with URL schemes + staggered timeouts
+        tryOpen('x-safari-https://'+stripped);
+        setTimeout(function(){
+          if(isInAppBrowser()) tryOpen('googlechrome://'+stripped);
+        },300);
+        setTimeout(function(){
+          if(isInAppBrowser()) tryOpen('googlechromes://'+stripped);
+        },600);
+        // After 1.2s show prominent fallback
+        setTimeout(function(){
+          if(isInAppBrowser()){
+            document.getElementById('status').innerHTML='<b>Tap the button below</b>';
+            var fb=document.getElementById('fallback');
+            fb.href='x-safari-https://'+stripped;
+            fb.style.background='#007AFF';
+            fb.style.fontSize='18px';
+            fb.textContent='Open in Safari';
+          }
+        },1200);
+      }else{
+        // Regular iOS escape (non-Instagram)
+        setTimeout(function(){location.href='x-safari-https://'+stripped},100);
+        setTimeout(function(){location.href='googlechrome://'+stripped},300);
+      }
     }else if(isAndroid){
       location.href='intent://'+location.hostname+'/'+source+'?browser=1#Intent;scheme=https;package=com.android.chrome;end';
     }else{
