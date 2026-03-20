@@ -1662,7 +1662,7 @@ ${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="sp
 
 app.get('/:source', async (req, res, next) => {
   // Skip if it's a known route
-  const knownRoutes = ['admin', 'go', 'api', 'favicon.ico', 'robots.txt'];
+  const knownRoutes = ['admin', 'go', 'api', 'favicon.ico', 'robots.txt', 'debug', 'health'];
   const source = req.params.source;
 
   // Check if it looks like a file or known route
