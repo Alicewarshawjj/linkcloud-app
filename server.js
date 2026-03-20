@@ -1934,6 +1934,222 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
 </html>`;
 }
 
+// ═══ DEBUG PAGE - Deep browser analysis ═══
+app.get('/debug', (req, res) => {
+  const ua = req.headers['user-agent'] || '';
+  const allHeaders = JSON.stringify(req.headers, null, 2);
+
+  res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Debug Info</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:monospace;background:#000;color:#0f0;padding:15px;font-size:12px;line-height:1.4}
+h2{color:#0ff;border-bottom:1px solid #0ff;padding-bottom:5px;margin-top:20px}
+.section{background:#111;padding:10px;margin:10px 0;border-radius:5px;word-break:break-all}
+.warn{color:#ff0}
+.error{color:#f00}
+.ok{color:#0f0}
+pre{white-space:pre-wrap;margin:0}
+button{background:#0f0;color:#000;border:none;padding:10px 20px;margin:5px;font-size:14px;cursor:pointer;border-radius:5px}
+#results{margin-top:20px}
+</style>
+</head><body>
+<h1>🔍 Instagram Browser Debug</h1>
+<p>Timestamp: ${new Date().toISOString()}</p>
+
+<h2>📱 Server-Side Detection</h2>
+<div class="section">
+<b>User-Agent:</b><br>${ua}<br><br>
+<b>Instagram detected:</b> <span class="${/Instagram|FBAN|FB_IAB/.test(ua) ? 'ok' : 'warn'}">${/Instagram|FBAN|FB_IAB/.test(ua)}</span><br>
+<b>iOS detected:</b> ${/iPhone|iPad|iPod/.test(ua)}<br>
+<b>Android detected:</b> ${/Android/.test(ua)}<br>
+</div>
+
+<h2>📋 All Request Headers</h2>
+<div class="section"><pre>${allHeaders}</pre></div>
+
+<h2>🖥️ Client-Side Detection</h2>
+<div class="section" id="client-info">Loading...</div>
+
+<h2>🔐 WebKit & Security</h2>
+<div class="section" id="webkit-info">Loading...</div>
+
+<h2>🚀 Escape Capability Tests</h2>
+<div class="section" id="escape-tests">
+<button onclick="testLocationHref()">Test location.href</button>
+<button onclick="testWindowOpen()">Test window.open</button>
+<button onclick="testAnchorClick()">Test anchor click</button>
+<button onclick="testAllSchemes()">Test All Schemes</button>
+</div>
+<div id="results"></div>
+
+<h2>📊 Feature Detection</h2>
+<div class="section" id="features">Loading...</div>
+
+<script>
+// Client-side detection
+(function(){
+  var ua = navigator.userAgent || '';
+  var vendor = navigator.vendor || '';
+
+  var info = '';
+  info += '<b>navigator.userAgent:</b><br>' + ua + '<br><br>';
+  info += '<b>navigator.vendor:</b> ' + vendor + '<br>';
+  info += '<b>navigator.platform:</b> ' + (navigator.platform || 'N/A') + '<br>';
+  info += '<b>navigator.standalone:</b> ' + navigator.standalone + '<br>';
+  info += '<b>window.innerWidth:</b> ' + window.innerWidth + '<br>';
+  info += '<b>window.innerHeight:</b> ' + window.innerHeight + '<br>';
+  info += '<b>window.devicePixelRatio:</b> ' + window.devicePixelRatio + '<br>';
+  info += '<b>document.referrer:</b> ' + (document.referrer || 'none') + '<br>';
+
+  // In-app browser detection
+  var isInstagram = /Instagram|FBAN|FB_IAB|FBAV|FBIOS/.test(ua);
+  var isFacebook = /FBAN|FBAV|FB_IAB/.test(ua) && !/Instagram/.test(ua);
+  var isTikTok = /TikTok|BytedanceWebview/.test(ua);
+  var isTwitter = /Twitter/.test(ua);
+
+  info += '<br><b>Detected as:</b><br>';
+  info += '- Instagram: <span class="' + (isInstagram ? 'ok' : '') + '">' + isInstagram + '</span><br>';
+  info += '- Facebook: ' + isFacebook + '<br>';
+  info += '- TikTok: ' + isTikTok + '<br>';
+  info += '- Twitter: ' + isTwitter + '<br>';
+
+  document.getElementById('client-info').innerHTML = info;
+})();
+
+// WebKit detection
+(function(){
+  var info = '';
+  var hasWebkit = !!(window.webkit);
+  var hasMessageHandlers = !!(window.webkit && window.webkit.messageHandlers);
+
+  info += '<b>window.webkit exists:</b> <span class="' + (hasWebkit ? 'warn' : 'ok') + '">' + hasWebkit + '</span><br>';
+  info += '<b>webkit.messageHandlers exists:</b> <span class="' + (hasMessageHandlers ? 'warn' : 'ok') + '">' + hasMessageHandlers + '</span><br>';
+
+  if(hasMessageHandlers){
+    info += '<b>messageHandlers keys:</b> ';
+    try {
+      var keys = Object.keys(window.webkit.messageHandlers);
+      info += keys.length > 0 ? keys.join(', ') : '(empty)';
+    } catch(e) {
+      info += '(cannot enumerate: ' + e.message + ')';
+    }
+    info += '<br>';
+  }
+
+  // Check for specific handlers
+  var handlers = ['instagram', 'observe', 'fb', 'fbNavigation', 'openInSafari', 'openExternal'];
+  info += '<br><b>Specific handler checks:</b><br>';
+  handlers.forEach(function(h){
+    var exists = false;
+    try {
+      exists = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[h]);
+    } catch(e){}
+    info += '- ' + h + ': ' + exists + '<br>';
+  });
+
+  // Security checks
+  info += '<br><b>Security:</b><br>';
+  info += '- isSecureContext: ' + window.isSecureContext + '<br>';
+  info += '- location.protocol: ' + location.protocol + '<br>';
+
+  document.getElementById('webkit-info').innerHTML = info;
+})();
+
+// Feature detection
+(function(){
+  var info = '';
+
+  info += '<b>window.open:</b> ' + (typeof window.open) + '<br>';
+  info += '<b>location.assign:</b> ' + (typeof location.assign) + '<br>';
+  info += '<b>location.replace:</b> ' + (typeof location.replace) + '<br>';
+  info += '<b>document.createElement:</b> ' + (typeof document.createElement) + '<br>';
+
+  // Check if popups blocked
+  info += '<br><b>Popup test:</b> ';
+  try {
+    var w = window.open('about:blank', '_blank');
+    if(w) {
+      info += '<span class="ok">allowed</span>';
+      w.close();
+    } else {
+      info += '<span class="error">blocked (returned null)</span>';
+    }
+  } catch(e) {
+    info += '<span class="error">blocked (' + e.message + ')</span>';
+  }
+
+  document.getElementById('features').innerHTML = info;
+})();
+
+// Test functions
+function log(msg, type){
+  var r = document.getElementById('results');
+  var color = type === 'ok' ? '#0f0' : type === 'error' ? '#f00' : '#ff0';
+  r.innerHTML += '<div style="color:'+color+';margin:5px 0">' + new Date().toLocaleTimeString() + ' - ' + msg + '</div>';
+}
+
+function testLocationHref(){
+  log('Testing location.href with x-safari-https...', 'warn');
+  try {
+    location.href = 'x-safari-https://cmehere.net/mememe?browser=1';
+    log('location.href executed (check if browser opened)', 'ok');
+  } catch(e){
+    log('location.href failed: ' + e.message, 'error');
+  }
+}
+
+function testWindowOpen(){
+  log('Testing window.open with x-safari-https...', 'warn');
+  try {
+    var w = window.open('x-safari-https://cmehere.net/mememe?browser=1', '_blank');
+    log('window.open returned: ' + (w ? 'window object' : 'null'), w ? 'ok' : 'error');
+  } catch(e){
+    log('window.open failed: ' + e.message, 'error');
+  }
+}
+
+function testAnchorClick(){
+  log('Testing anchor click...', 'warn');
+  try {
+    var a = document.createElement('a');
+    a.href = 'x-safari-https://cmehere.net/mememe?browser=1';
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    log('Anchor click executed', 'ok');
+  } catch(e){
+    log('Anchor click failed: ' + e.message, 'error');
+  }
+}
+
+function testAllSchemes(){
+  var schemes = [
+    'x-safari-https://cmehere.net/mememe?browser=1',
+    'googlechrome://cmehere.net/mememe?browser=1',
+    'googlechromes://cmehere.net/mememe?browser=1'
+  ];
+  log('Testing all schemes with 300ms intervals...', 'warn');
+  schemes.forEach(function(scheme, i){
+    setTimeout(function(){
+      log('Trying: ' + scheme.split('://')[0] + '://', 'warn');
+      try {
+        var w = window.open(scheme, '_blank');
+        log('Result: ' + (w ? 'opened' : 'blocked'), w ? 'ok' : 'error');
+      } catch(e){
+        log('Error: ' + e.message, 'error');
+      }
+    }, i * 300);
+  });
+}
+</script>
+</body></html>`);
+});
+
 // ═══ HEALTH CHECK (restricted to Railway/internal use) ═══
 app.get('/health', (req, res) => {
   // Only allow health checks from Railway or localhost
