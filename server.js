@@ -1679,9 +1679,36 @@ app.get('/:source', async (req, res, next) => {
   // Check if this source needs platform-specific escape logic
   const platform = SOURCE_PLATFORM_MAP[cleanSource.toLowerCase()];
 
-  // If browser=1 param present, show normal page (already escaped)
+  // If browser=1 param present, redirect directly to OnlyFans (or primary link)
   if (req.query.browser === '1') {
-    // Continue to render normal page below
+    try {
+      if (!dbReady) {
+        return res.redirect('/');
+      }
+      const result = await pool.query('SELECT content FROM sites WHERE slug = $1', ['main']);
+      if (result.rows.length === 0) return res.redirect('/');
+      const data = result.rows[0].content;
+      const socials = data.socials || [];
+
+      // Find OnlyFans link (primary destination)
+      const onlyfansLink = socials.find(s => s.type === 'onlyfans');
+      if (onlyfansLink && onlyfansLink.url) {
+        // Direct redirect to OnlyFans - skip landing page!
+        return res.redirect(302, onlyfansLink.url);
+      }
+
+      // Fallback: if no OnlyFans, try first featured link
+      const featured = data.featured || data.feats || [];
+      if (featured.length > 0 && featured[0].url) {
+        return res.redirect(302, featured[0].url);
+      }
+
+      // Last fallback: show landing page
+      return res.redirect('/');
+    } catch (e) {
+      console.error('Browser redirect error:', e);
+      return res.redirect('/');
+    }
   } else if (platform) {
     // This source needs auto-open escape - show escape page
     return res.send(generateAutoOpenPage(cleanSource, platform));
@@ -1974,6 +2001,16 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
       var overlay=document.getElementById('inappOverlay');
       var closeBtn=document.getElementById('closeOverlay');
 
+      // IMPORTANT: Change URL to include browser=1 BEFORE user clicks "Open in external browser"
+      // This way, when Instagram opens Safari, it will redirect directly to OnlyFans
+      try{
+        var url=new URL(window.location.href);
+        if(!url.searchParams.has('browser')){
+          url.searchParams.set('browser','1');
+          history.replaceState(null,'',url.toString());
+        }
+      }catch(e){}
+
       // Show the overlay
       overlay.classList.add('active');
 
@@ -1989,13 +2026,18 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
       function tryAutoEscape(){
         if(isThreads)return; // Don't try auto-escape for Threads - causes white screen
         try{
+          // Add browser=1 param to URL so server redirects directly to OnlyFans
+          var url=new URL(window.location.href);
+          url.searchParams.set('browser','1');
+          var newUrl=url.toString();
+          var stripped=newUrl.replace(/^https?:\\/\\//,'');
+
           if(isIOS){
-            var stripped=window.location.href.replace(/^https?:\\/\\//,'');
             var xSafariUrl='x-safari-https://'+stripped;
             window.location.href=xSafariUrl;
           }else if(isAndroid){
-            var hostname=window.location.hostname;
-            var pathAndSearch=window.location.pathname+window.location.search;
+            var hostname=url.hostname;
+            var pathAndSearch=url.pathname+url.search;
             var intentUrl='intent://'+hostname+pathAndSearch+'#Intent;scheme=https;package=com.android.chrome;end';
             window.location=intentUrl;
           }
