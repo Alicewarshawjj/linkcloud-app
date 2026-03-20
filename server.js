@@ -1882,31 +1882,12 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
     body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f0f2f5;min-height:100vh;display:flex;justify-content:center}
     .container{width:100%;max-width:480px;background:#fff;min-height:100vh;box-shadow:0 0 20px rgba(0,0,0,.08)}
 
-    /* In-App Browser Overlay - 18+ Style Warning */
-    .inapp-overlay{display:none;position:fixed;inset:0;z-index:9999;opacity:0;transition:opacity .3s}
-    .inapp-overlay.active{display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:1}
-    .inapp-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
-    .inapp-close{position:absolute;top:16px;left:16px;z-index:5;width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer}
-    .inapp-close svg{width:28px;height:28px;stroke:#fff;stroke-width:2.5;fill:none}
-    .inapp-tooltip{position:absolute;top:12px;right:12px;z-index:5;background:#fff;color:#000;padding:10px 14px;border-radius:12px;font-size:13px;font-weight:600;max-width:140px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.3)}
-    .inapp-tooltip::after{content:'';position:absolute;top:50%;right:-8px;transform:translateY(-50%);border:8px solid transparent;border-left-color:#fff}
-    .inapp-tooltip .dots{font-weight:900;letter-spacing:2px}
-    .inapp-content{position:relative;z-index:2;text-align:center;padding:40px 30px;max-width:380px}
-    .inapp-icon{margin-bottom:24px}
-    .inapp-icon svg{width:64px;height:64px;stroke:#fff;stroke-width:1.5;fill:none}
-    .inapp-title{color:#fff;font-size:26px;font-weight:700;margin-bottom:12px;letter-spacing:-0.5px}
-    .inapp-subtitle{color:rgba(255,255,255,.75);font-size:16px;line-height:1.5;margin-bottom:40px}
-    .inapp-instructions{text-align:center}
-    .inapp-instructions-title{color:#fff;font-size:18px;font-weight:600;margin-bottom:20px}
-    .inapp-step{color:rgba(255,255,255,.85);font-size:16px;line-height:1.6;margin-bottom:8px}
-    .inapp-step:last-child{margin-bottom:0}
-
-    /* Threads-only tooltip (no overlay, just the hint) */
-    .threads-tooltip{display:none;position:fixed;top:12px;right:12px;z-index:9999;background:#fff;color:#000;padding:10px 14px;border-radius:12px;font-size:13px;font-weight:600;max-width:140px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.3);animation:threadsTooltipPulse 2s ease-in-out infinite}
-    .threads-tooltip.active{display:block}
-    .threads-tooltip::after{content:'';position:absolute;top:50%;right:-8px;transform:translateY(-50%);border:8px solid transparent;border-left-color:#fff}
-    .threads-tooltip .dots{font-weight:900;letter-spacing:2px}
-    @keyframes threadsTooltipPulse{0%,100%{transform:scale(1);box-shadow:0 4px 20px rgba(0,0,0,.3)}50%{transform:scale(1.05);box-shadow:0 6px 25px rgba(0,0,0,.4)}}
+    /* In-App Browser - Tooltip Only (no overlay, full page visible) */
+    .inapp-tooltip{display:none;position:fixed;top:12px;right:60px;z-index:9999;background:#fff;color:#000;padding:12px 16px;border-radius:14px;font-size:13px;font-weight:600;line-height:1.4;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.25);animation:tooltipPulse 2s ease-in-out infinite}
+    .inapp-tooltip.active{display:block}
+    .inapp-tooltip::after{content:'';position:absolute;top:50%;right:-10px;transform:translateY(-50%);border:10px solid transparent;border-left-color:#fff}
+    .inapp-tooltip .dots{font-weight:900;letter-spacing:1px}
+    @keyframes tooltipPulse{0%,100%{transform:scale(1);box-shadow:0 4px 24px rgba(0,0,0,.25)}50%{transform:scale(1.03);box-shadow:0 6px 28px rgba(0,0,0,.35)}}
 
     /* Cover */
     .cover{position:relative;height:180px;overflow:hidden}
@@ -1964,41 +1945,8 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   </style>
 </head>
 <body>
-  <div id="inappOverlay" class="inapp-overlay">
-    <div class="inapp-backdrop"></div>
-
-    <!-- X close button top left -->
-    <div class="inapp-close" id="closeOverlay">
-      <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
-    </div>
-
-    <!-- Tooltip pointing to 3 dots -->
-    <div class="inapp-tooltip">
-      Click <span class="dots">•••</span><br>to open in<br>external browser
-    </div>
-
-    <div class="inapp-content">
-      <!-- Eye with slash icon -->
-      <div class="inapp-icon">
-        <svg viewBox="0 0 24 24">
-          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-          <line x1="1" y1="1" x2="23" y2="23"/>
-        </svg>
-      </div>
-
-      <h2 class="inapp-title">18+ Content Warning</h2>
-      <p class="inapp-subtitle">This link may contain<br>graphic or adult content.</p>
-
-      <div class="inapp-instructions">
-        <p class="inapp-instructions-title">To visit this link</p>
-        <p class="inapp-step">1. Tap the three dots on the top right.</p>
-        <p class="inapp-step">2. Select "Open in external browser"</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Threads-only tooltip (shown without overlay) -->
-  <div id="threadsTooltip" class="threads-tooltip">
+  <!-- In-App Browser Tooltip (Instagram, TikTok, Twitter, Threads) -->
+  <div id="inappTooltip" class="inapp-tooltip">
     Click <span class="dots">•••</span><br>to open in<br>external browser
   </div>
 
@@ -2020,15 +1968,17 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   </div>
 
   <script>
-    // In-app browser detection - show 18+ warning with instructions
+    // In-app browser detection - show tooltip only (full page visible)
     (function(){
-      if(!window.__IS_INAPP__)return;
+      var isInApp=window.__IS_INAPP__;
+      var isThreads=window.__IS_THREADS__;
+
+      // Exit if not in-app browser
+      if(!isInApp && !isThreads)return;
 
       var isIOS=window.__IS_IOS__;
       var isAndroid=window.__IS_ANDROID__;
-      var isThreads=window.__IS_THREADS__;
-      var overlay=document.getElementById('inappOverlay');
-      var closeBtn=document.getElementById('closeOverlay');
+      var tooltip=document.getElementById('inappTooltip');
 
       // IMPORTANT: Change URL to include browser=1 BEFORE user clicks "Open in external browser"
       // This way, when Instagram opens Safari, it will redirect directly to OnlyFans
@@ -2040,22 +1990,23 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
         }
       }catch(e){}
 
-      // Show the overlay
-      overlay.classList.add('active');
-
-      // Close button - hide overlay and show page
-      closeBtn.onclick=function(e){
-        if(e)e.preventDefault();
-        overlay.classList.remove('active');
-      };
+      // Show the tooltip
+      if(tooltip){
+        tooltip.classList.add('active');
+        // Auto-hide after 10 seconds
+        setTimeout(function(){
+          tooltip.style.transition='opacity 0.5s';
+          tooltip.style.opacity='0';
+          setTimeout(function(){tooltip.classList.remove('active')},500);
+        },10000);
+      }
 
       // Try auto-escape silently in background
       // NOTE: Threads (Meta) blocks x-safari-https:// causing white screen
-      // So for Threads we only show instructions, no auto-escape attempt
+      // So for Threads we only show tooltip, no auto-escape attempt
       function tryAutoEscape(){
         if(isThreads)return; // Don't try auto-escape for Threads - causes white screen
         try{
-          // Add browser=1 param to URL so server redirects directly to OnlyFans
           var url=new URL(window.location.href);
           url.searchParams.set('browser','1');
           var newUrl=url.toString();
@@ -2074,23 +2025,8 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
       }
 
       // Try auto-escape after 2 seconds (silent attempt) - except Threads
-      if(!isThreads){
+      if(!isThreads && isInApp){
         setTimeout(tryAutoEscape,2000);
-      }
-    })();
-
-    // Threads-only: show tooltip without overlay
-    (function(){
-      if(!window.__IS_THREADS__)return;
-      var tooltip=document.getElementById('threadsTooltip');
-      if(tooltip){
-        tooltip.classList.add('active');
-        // Auto-hide after 8 seconds
-        setTimeout(function(){
-          tooltip.style.transition='opacity 0.5s';
-          tooltip.style.opacity='0';
-          setTimeout(function(){tooltip.classList.remove('active')},500);
-        },8000);
       }
     })();
   </script>
