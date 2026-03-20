@@ -1101,105 +1101,6 @@ app.get('/api/debug-ua', (req, res) => {
   });
 });
 
-// ═══ DEBUG: Test escape methods (access from Instagram to test) ═══
-app.get('/debug-escape', (req, res) => {
-  res.send(`<!DOCTYPE html>
-<html><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Escape Method Tester</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#111;color:#fff;padding:20px}
-h1{font-size:18px;margin-bottom:20px;text-align:center}
-.info{background:#222;padding:15px;border-radius:8px;margin-bottom:20px;font-size:12px;word-break:break-all}
-.btn{display:block;width:100%;padding:15px;margin:10px 0;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;text-align:center;text-decoration:none}
-.btn-primary{background:#0095f6;color:#fff}
-.btn-secondary{background:#333;color:#fff}
-.result{background:#222;padding:10px;margin-top:10px;border-radius:8px;font-size:12px;display:none}
-.success{border:2px solid #0f0}
-.fail{border:2px solid #f00}
-</style>
-</head><body>
-<h1>🔧 Instagram Escape Tester</h1>
-
-<div class="info" id="info">Loading...</div>
-
-<button class="btn btn-primary" onclick="testMethod('x-safari-https')">1. x-safari-https://</button>
-<div class="result" id="result1"></div>
-
-<button class="btn btn-primary" onclick="testMethod('googlechrome')">2. googlechrome://</button>
-<div class="result" id="result2"></div>
-
-<button class="btn btn-primary" onclick="testMethod('window-open')">3. window.open(_blank)</button>
-<div class="result" id="result3"></div>
-
-<button class="btn btn-primary" onclick="testMethod('location-href')">4. location.href (direct)</button>
-<div class="result" id="result4"></div>
-
-<button class="btn btn-primary" onclick="testMethod('anchor-click')">5. Anchor click simulation</button>
-<div class="result" id="result5"></div>
-
-<button class="btn btn-primary" onclick="testMethod('meta-refresh')">6. Meta refresh redirect</button>
-<div class="result" id="result6"></div>
-
-<button class="btn btn-secondary" onclick="copyUA()">Copy User Agent</button>
-
-<script>
-var ua = navigator.userAgent;
-var isIOS = /iPhone|iPad|iPod/i.test(ua);
-var isInstagram = ua.indexOf('Instagram') !== -1;
-var targetUrl = 'https://cmehere.net/?browser=1&test=1';
-
-document.getElementById('info').innerHTML =
-  '<b>User Agent:</b><br>' + ua + '<br><br>' +
-  '<b>iOS:</b> ' + isIOS + '<br>' +
-  '<b>Instagram:</b> ' + isInstagram;
-
-function testMethod(method) {
-  var stripped = targetUrl.replace(/^https?:\\/\\//, '');
-
-  switch(method) {
-    case 'x-safari-https':
-      location.href = 'x-safari-https://' + stripped;
-      break;
-    case 'googlechrome':
-      location.href = 'googlechrome://' + stripped;
-      break;
-    case 'window-open':
-      window.open(targetUrl, '_blank');
-      break;
-    case 'location-href':
-      location.href = targetUrl;
-      break;
-    case 'anchor-click':
-      var a = document.createElement('a');
-      a.href = targetUrl;
-      a.target = '_blank';
-      a.rel = 'noopener';
-      document.body.appendChild(a);
-      a.click();
-      break;
-    case 'meta-refresh':
-      var meta = document.createElement('meta');
-      meta.httpEquiv = 'refresh';
-      meta.content = '0;url=' + targetUrl;
-      document.head.appendChild(meta);
-      break;
-  }
-}
-
-function copyUA() {
-  navigator.clipboard.writeText(ua).then(function() {
-    alert('Copied!');
-  }).catch(function() {
-    prompt('Copy:', ua);
-  });
-}
-</script>
-</body></html>`);
-});
-
 // ═══ DEBUG: Check analytics table ═══
 app.get('/api/analytics/debug', requireAuth, async (req, res) => {
   try {
@@ -2027,7 +1928,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
 
   <script>
     // Deep linking script for in-app browsers
-    (function(){if(!window.__IS_INAPP__)return;if(window.location.search.indexOf('browser=1')!==-1)return;var isIOS=window.__IS_IOS__;var isAndroid=window.__IS_ANDROID__;var overlay=document.getElementById('inappOverlay');var openBtn=document.getElementById('openSafariBtn');var fallbackBtn=document.getElementById('nothingHappened');if(isIOS){openBtn.textContent='Open in Safari 😉'}else if(isAndroid){openBtn.textContent='Open in Chrome 😉'}else{openBtn.textContent='Open in Browser 😉'}overlay.classList.add('active');function addBrowserParam(url){try{var u=new URL(url);u.searchParams.set('browser','1');return u.toString()}catch(e){return url}}function handleiOSClick(){try{var canonicalUrl=addBrowserParam(window.location.href);var meta=document.createElement('meta');meta.httpEquiv='refresh';meta.content='0;url='+canonicalUrl;document.head.appendChild(meta)}catch(e){}}function handleAndroidClick(){try{var hostname=window.location.hostname;var pathAndSearch=window.location.pathname+window.location.search;var fallbackUrl=addBrowserParam(window.location.href);var intentUrl='intent://'+hostname+pathAndSearch+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(fallbackUrl)+';end';window.location=intentUrl}catch(e){}}openBtn.onclick=function(e){if(e)e.preventDefault();if(isIOS)handleiOSClick();else if(isAndroid)handleAndroidClick();else window.open(window.location.href,'_blank')};fallbackBtn.onclick=function(e){if(e)e.preventDefault();var url=window.location.href;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(url).then(function(){alert('URL copied!\\n\\nPaste it in Safari to open.\\n\\nOr: tap ••• at top right → "Open in Browser"')}).catch(function(){prompt('Copy this URL and open in Safari:',url)})}else{prompt('Copy this URL and open in Safari:',url)}};if(isAndroid){try{var a=document.createElement('a');a.href=window.location.href;a.target='_blank';a.rel='noopener noreferrer';a.style.display='none';document.body.appendChild(a);a.click();setTimeout(function(){if(a.parentNode)a.parentNode.removeChild(a)},500);setTimeout(function(){handleAndroidClick()},3000)}catch(e){}}})();
+    (function(){if(!window.__IS_INAPP__)return;var isIOS=window.__IS_IOS__;var isAndroid=window.__IS_ANDROID__;var overlay=document.getElementById('inappOverlay');var openBtn=document.getElementById('openSafariBtn');var fallbackBtn=document.getElementById('nothingHappened');if(isIOS){openBtn.textContent='Open in Safari 😉'}else if(isAndroid){openBtn.textContent='Open in Chrome 😉'}else{openBtn.textContent='Open in Browser 😉'}overlay.classList.add('active');function addBrowserParam(url){try{var u=new URL(url);u.searchParams.set('browser','1');return u.toString()}catch(e){return url}}function handleiOSClick(){try{var canonicalUrl=addBrowserParam(window.location.href);var stripped=canonicalUrl.replace(/^https?:\\/\\//,'');var xSafariUrl=canonicalUrl.startsWith('https')?'x-safari-https://'+stripped:'x-safari-http://'+stripped;window.open(xSafariUrl,'_blank')}catch(e){}}function handleAndroidClick(){try{var hostname=window.location.hostname;var pathAndSearch=window.location.pathname+window.location.search;var fallbackUrl=addBrowserParam(window.location.href);var intentUrl='intent://'+hostname+pathAndSearch+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(fallbackUrl)+';end';window.location=intentUrl}catch(e){}}openBtn.onclick=function(e){if(e)e.preventDefault();if(isIOS)handleiOSClick();else if(isAndroid)handleAndroidClick();else window.open(window.location.href,'_blank')};fallbackBtn.onclick=function(e){if(e)e.preventDefault();var url=window.location.href;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(url).then(function(){alert('URL copied!\\n\\nPaste it in Safari to open.\\n\\nOr: tap ••• at top right → "Open in Browser"')}).catch(function(){prompt('Copy this URL and open in Safari:',url)})}else{prompt('Copy this URL and open in Safari:',url)}};if(isAndroid){try{var a=document.createElement('a');a.href=window.location.href;a.target='_blank';a.rel='noopener noreferrer';a.style.display='none';document.body.appendChild(a);a.click();setTimeout(function(){if(a.parentNode)a.parentNode.removeChild(a)},500);setTimeout(function(){handleAndroidClick()},3000)}catch(e){}}})();
   </script>
 </body>
 </html>`;
