@@ -1660,86 +1660,6 @@ ${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="sp
 </body></html>`;
 }
 
-// Instagram escape page - exact LinkTwin technique
-function generateInstagramEscapePage(source) {
-  const targetUrl = `https://cmehere.net/${source}?browser=1`;
-  const chromeUrl = `googlechrome://cmehere.net/${source}?browser=1`;
-  const safariUrl = `x-safari-https://cmehere.net/${source}?browser=1`;
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex">
-<title>Opening...</title>
-<style>
-body{margin:0;padding:60px 20px 40px;min-height:100vh;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#faf8f5;display:flex;flex-direction:column;align-items:center;justify-content:space-between}
-.top{display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:20px}
-.icon{width:48px;height:48px;color:#333}
-.text{font-size:18px;font-weight:500;color:#1a1a1a;margin:0}
-.spacer{flex:1;min-height:100px}
-.buttons{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;gap:10px;width:100%;max-width:220px}
-.btn{display:block;width:100%;padding:12px 20px;border-radius:12px;font-size:15px;font-weight:600;text-align:center;text-decoration:none;border:2px solid #999;color:#666;background:transparent;box-sizing:border-box;cursor:pointer}
-</style>
-</head>
-<body>
-<div class="top">
-<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
-<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-</svg>
-<p class="text">Open in browser</p>
-</div>
-<div class="spacer"></div>
-<div class="buttons">
-<a href="${targetUrl}" id="continueBtn" class="btn">Open in browser</a>
-</div>
-<script>
-(function(){
-var chromeUrl='${chromeUrl}';
-var safariUrl='${safariUrl}';
-var targetUrl='${targetUrl}';
-var timeoutId,timeoutId2,timeoutId3;
-
-function cancelAll(){
-if(typeof timeoutId!=='undefined')clearTimeout(timeoutId);
-if(typeof timeoutId2!=='undefined')clearTimeout(timeoutId2);
-if(typeof timeoutId3!=='undefined')clearTimeout(timeoutId3);
-}
-
-document.addEventListener('visibilitychange',function(){if(document.hidden)cancelAll()});
-window.addEventListener('pagehide',cancelAll);
-
-// Auto-redirect cascade - exact LinkTwin timing
-timeoutId=setTimeout(function(){window.location=chromeUrl},1000);
-timeoutId2=setTimeout(function(){window.location=safariUrl},1300);
-timeoutId3=setTimeout(function(){window.location=targetUrl},4000);
-
-// Button click handler
-document.getElementById('continueBtn').addEventListener('click',function(e){
-e.preventDefault();
-cancelAll();
-var schemes=[chromeUrl,safariUrl];
-var attempt=0;
-var timer=null;
-function tryNext(){
-if(attempt<schemes.length){
-window.open(schemes[attempt],'_blank');
-attempt++;
-timer=setTimeout(tryNext,100);
-}else{
-window.location.href=targetUrl;
-}
-}
-tryNext();
-});
-})();
-</script>
-</body>
-</html>`;
-}
-
 app.get('/:source', async (req, res, next) => {
   // Skip if it's a known route
   const knownRoutes = ['admin', 'go', 'api', 'favicon.ico', 'robots.txt'];
@@ -1756,19 +1676,12 @@ app.get('/:source', async (req, res, next) => {
     return next(); // Invalid source, pass to 404
   }
 
-  // Detect Instagram server-side
-  const userAgent = req.headers['user-agent'] || '';
-  const isInstagram = /Instagram/i.test(userAgent);
-
   // Check if this source needs platform-specific escape logic
   const platform = SOURCE_PLATFORM_MAP[cleanSource.toLowerCase()];
 
   // If browser=1 param present, show normal page (already escaped)
   if (req.query.browser === '1') {
     // Continue to render normal page below
-  } else if (isInstagram) {
-    // Instagram: show LinkTwin-style escape page with auto-redirect
-    return res.send(generateInstagramEscapePage(cleanSource));
   } else if (platform) {
     // This source needs auto-open escape - show escape page
     return res.send(generateAutoOpenPage(cleanSource, platform));
