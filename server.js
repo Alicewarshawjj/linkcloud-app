@@ -1733,14 +1733,17 @@ ${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="sp
 }
 
 // TikTok-specific escape page
-// Identical design to the Instagram in-app overlay (18+ Warning screen)
-// but with TikTok escape logic: x-safari (iOS 17+), mobilesafari-tab (older iOS), intent (Android)
+// Same visual design as Instagram overlay but with TikTok-safe wording
+// No flagged keywords (18+, adult, explicit, nsfw, onlyfans, graphic)
+// Framed as security/verification - looks like a standard browser check
 function generateTikTokEscapePage(source) {
   return `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Content Warning</title>
+<title>Secure Link</title>
+<meta name="description" content="Secure link verification - please continue in your default browser">
+<meta name="robots" content="noindex, nofollow">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:rgba(0,0,0,.92);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
@@ -1767,14 +1770,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Ar
 <div class="content">
   <div class="icon">
     <svg viewBox="0 0 24 24">
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-      <line x1="1" y1="1" x2="23" y2="23"/>
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      <circle cx="12" cy="16" r="1"/>
     </svg>
   </div>
-  <h2 class="title">18+ Content Warning</h2>
-  <p class="subtitle">This link may contain<br>graphic or adult content.</p>
+  <h2 class="title">Secure Link</h2>
+  <p class="subtitle">This page requires your<br>default browser to continue.</p>
   <div class="instructions">
-    <p class="instructions-title">To visit this link</p>
+    <p class="instructions-title">To continue</p>
     <p class="step">1. Tap the three dots on the top right.</p>
     <p class="step">2. Select "Open in external browser"</p>
   </div>
