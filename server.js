@@ -1733,54 +1733,53 @@ ${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="sp
 }
 
 // TikTok-specific escape page
-// Same visual design as Instagram overlay but with TikTok-safe wording
-// No flagged keywords (18+, adult, explicit, nsfw, onlyfans, graphic)
-// Framed as security/verification - looks like a standard browser check
+// Designed to look like a friendly creator "see more" page
+// No flagged keywords - completely TikTok-scanner safe
+// Arrow pointing to ⋯ menu, warm inviting tone
 function generateTikTokEscapePage(source) {
   return `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Secure Link</title>
-<meta name="description" content="Secure link verification - please continue in your default browser">
+<title>See More</title>
+<meta name="description" content="Follow me for exclusive content and updates">
 <meta name="robots" content="noindex, nofollow">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:rgba(0,0,0,.92);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .backdrop{position:fixed;top:0;left:0;right:0;bottom:0;backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px)}
-.x-icon{position:fixed;top:48px;left:16px;z-index:10000;width:28px;height:28px;stroke:#666;stroke-width:2;fill:none}
-.tooltip{position:fixed;top:48px;right:50px;z-index:10000;background:#fff;color:#000;padding:10px 12px;border-radius:10px;font-size:11px;font-weight:600;line-height:1.3;text-align:right;box-shadow:0 4px 20px rgba(0,0,0,.5)}
-.tooltip::after{content:'';position:absolute;top:50%;right:-8px;transform:translateY(-50%);border:8px solid transparent;border-left-color:#fff}
-.tooltip .dots{font-weight:900;letter-spacing:1px}
+/* Arrow pointing to top-right ⋯ menu */
+.arrow{position:fixed;top:38px;right:14px;z-index:10000;display:flex;flex-direction:column;align-items:center;animation:float 2s ease-in-out infinite}
+.arrow-icon{font-size:28px;line-height:1;transform:rotate(-45deg)}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.arrow-label{margin-top:4px;background:#fff;color:#000;padding:6px 10px;border-radius:8px;font-size:10px;font-weight:700;white-space:nowrap;box-shadow:0 4px 15px rgba(0,0,0,.4)}
 .content{position:relative;z-index:10001;text-align:center;padding:0 32px;color:#fff}
-.icon{margin-bottom:20px}
-.icon svg{width:48px;height:48px;stroke:#fff;stroke-width:1.5;fill:none}
-.title{font-size:22px;font-weight:600;margin-bottom:12px;color:#fff}
-.subtitle{font-size:15px;color:rgba(255,255,255,.6);line-height:1.5;margin-bottom:36px}
-.instructions{text-align:left;max-width:300px;margin:0 auto}
-.instructions-title{font-size:15px;font-weight:700;color:#fff;margin-bottom:14px}
-.step{font-size:14px;color:rgba(255,255,255,.8);margin-bottom:8px;padding-left:4px}
+.emoji-icon{font-size:56px;margin-bottom:20px}
+.title{font-size:24px;font-weight:700;margin-bottom:10px;color:#fff}
+.subtitle{font-size:16px;color:rgba(255,255,255,.6);line-height:1.6;margin-bottom:32px}
+.steps-box{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:20px 24px;max-width:300px;margin:0 auto;text-align:left}
+.steps-title{font-size:14px;font-weight:700;color:rgba(255,255,255,.9);margin-bottom:14px;text-align:center}
+.step{display:flex;align-items:center;gap:10px;font-size:14px;color:rgba(255,255,255,.75);margin-bottom:10px;line-height:1.4}
+.step:last-child{margin-bottom:0}
+.step-num{width:24px;height:24px;background:rgba(255,255,255,.1);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
+.step b{color:#fff}
+.step .dots-inline{font-weight:900;letter-spacing:2px;background:rgba(255,255,255,.12);padding:1px 6px;border-radius:4px}
 </style>
 </head><body>
 <div class="backdrop"></div>
-<svg class="x-icon" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
-<div class="tooltip">
-  Click <span class="dots">&bull;&bull;&bull;</span><br>to open in<br>external browser
+<div class="arrow">
+  <div class="arrow-icon">↗</div>
+  <div class="arrow-label">Tap here</div>
 </div>
 <div class="content">
-  <div class="icon">
-    <svg viewBox="0 0 24 24">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-      <circle cx="12" cy="16" r="1"/>
-    </svg>
-  </div>
-  <h2 class="title">Secure Link</h2>
-  <p class="subtitle">This page requires your<br>default browser to continue.</p>
-  <div class="instructions">
-    <p class="instructions-title">To continue</p>
-    <p class="step">1. Tap the three dots on the top right.</p>
-    <p class="step">2. Select "Open in external browser"</p>
+  <div class="emoji-icon">✨</div>
+  <h2 class="title">See more of me</h2>
+  <p class="subtitle">Open this page in your browser<br>for the full experience</p>
+  <div class="steps-box">
+    <p class="steps-title">Quick steps</p>
+    <div class="step"><span class="step-num">1</span> Tap <span class="dots-inline"><b>&bull;&bull;&bull;</b></span> at the top right</div>
+    <div class="step"><span class="step-num">2</span> Select <b>"Open in browser"</b></div>
+    <div class="step"><span class="step-num">3</span> Enjoy! 💕</div>
   </div>
 </div>
 <script>
