@@ -513,6 +513,7 @@ app.use(helmet({
   xXssProtection: true
 }));
 app.use(express.json({ limit: '10mb' }));
+app.use(express.text({ type: 'text/plain', limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
@@ -740,10 +741,15 @@ app.post('/api/analytics/click', analyticsLimiter, async (req, res) => {
       return res.json({ ok: true }); // Silently accept but don't store
     }
 
-    const { link_type, link_id, link_title } = req.body;
+    // Handle both JSON body and text body (sendBeacon sometimes sends as text/plain)
+    let body = req.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch(e) { return res.json({ ok: true }); }
+    }
+    const { link_type, link_id, link_title, source: clientSource } = body || {};
 
     // Validate input - reject invalid data
-    if (!link_type || typeof link_type !== 'string' || !['social', 'featured', 'carousel', 'redirect'].includes(link_type)) {
+    if (!link_type || typeof link_type !== 'string' || !['social', 'featured', 'carousel', 'redirect', 'visit'].includes(link_type)) {
       return res.json({ ok: true }); // Silently reject invalid
     }
 
@@ -765,11 +771,14 @@ app.post('/api/analytics/click', analyticsLimiter, async (req, res) => {
     // Get country using proper IP detection for Railway
     const geoInfo = getCountryFromIP(req);
 
+    // Sanitize client-provided source
+    const safeClientSource = clientSource ? String(clientSource).slice(0, 50).replace(/[^a-zA-Z0-9_-]/g, '') || null : null;
+
     // SECURITY: Do NOT store link_url - it could leak protected URLs
     await pool.query(
       `INSERT INTO analytics (slug, source, link_type, link_id, link_title, user_agent, ip_address, country, country_code, region, os, browser, device, referrer)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-      ['main', null, link_type, safe_link_id, safe_link_title, user_agent, geoInfo.ip, geoInfo.country, geoInfo.countryCode, geoInfo.region, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
+      ['main', safeClientSource, link_type, safe_link_id, safe_link_title, user_agent, geoInfo.ip, geoInfo.country, geoInfo.countryCode, geoInfo.region, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
     );
 
     res.json({ ok: true });
@@ -811,6 +820,17 @@ app.get('/api/analytics/stats', requireAuth, async (req, res) => {
        GROUP BY link_type, link_title
        ORDER BY clicks DESC
        LIMIT 10`,
+      [d]
+    );
+
+    // Links per source breakdown - which source sends clicks to which link
+    const linksPerSourceResult = await pool.query(
+      `SELECT COALESCE(NULLIF(source, ''), 'Direct') as source, link_title, link_type, COUNT(*) as clicks
+       FROM analytics
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '1 day' * $1 AND link_title IS NOT NULL AND link_title != ''
+       GROUP BY COALESCE(NULLIF(source, ''), 'Direct'), link_title, link_type
+       ORDER BY clicks DESC
+       LIMIT 30`,
       [d]
     );
 
@@ -874,12 +894,12 @@ app.get('/api/analytics/stats', requireAuth, async (req, res) => {
        LIMIT 20`
     );
 
-    // By Source (traffic sources like ig1, twitter1, etc.)
+    // By Source (traffic sources like ig1, twitter1, etc.) - include Direct traffic
     const bySourceResult = await pool.query(
-      `SELECT source, COUNT(*) as clicks
+      `SELECT COALESCE(NULLIF(source, ''), 'Direct') as source, COUNT(*) as clicks
        FROM analytics
-       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '1 day' * $1 AND source IS NOT NULL AND source != ''
-       GROUP BY source
+       WHERE slug = 'main' AND clicked_at > NOW() - INTERVAL '1 day' * $1
+       GROUP BY COALESCE(NULLIF(source, ''), 'Direct')
        ORDER BY clicks DESC`,
       [d]
     );
@@ -888,6 +908,7 @@ app.get('/api/analytics/stats', requireAuth, async (req, res) => {
       total: parseInt(totalResult.rows[0]?.total || 0),
       byType: byTypeResult.rows,
       topLinks: topLinksResult.rows,
+      linksPerSource: linksPerSourceResult.rows,
       daily: dailyResult.rows,
       byCountry: byCountryResult.rows,
       byOS: byOSResult.rows,
@@ -1325,7 +1346,7 @@ app.get('/go/:encodedLink', async (req, res) => {
     const referrer = (req.headers.referer || '').slice(0, 500);
 
     // Sanitize query params
-    const safeType = ['social', 'featured', 'carousel'].includes(linkType) ? linkType : 'redirect';
+    const safeType = ['social', 'featured', 'carousel', 'visit'].includes(linkType) ? linkType : 'redirect';
     const safeTitle = (linkTitle || 'Link').slice(0, 200).replace(/[<>"'&]/g, '');
 
     // Parse device/location for analytics
@@ -1509,9 +1530,21 @@ app.get('/', async (req, res) => {
 
 // ═══ SPECIAL ROUTES: Threads & Reddit (auto-open in external browser) ═══
 // These platforms don't send identifiable UA/referrer, so we use dedicated routes
-app.get('/threads', (req, res) => {
-  // If already opened in browser, redirect to main page
+app.get('/threads', async (req, res) => {
+  // If already opened in browser, track and redirect to main page
   if (req.query.browser === '1') {
+    try {
+      if (dbReady) {
+        const ua = (req.headers['user-agent'] || '').slice(0, 500);
+        const di = parseUserAgent(ua, req.headers);
+        const gi = getCountryFromIP(req);
+        await pool.query(
+          `INSERT INTO analytics (slug, source, link_type, link_id, link_title, user_agent, ip_address, country, country_code, region, os, browser, device, referrer)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+          ['main', 'threads', 'visit', 'threads-escape', 'Threads → Site', ua, gi.ip, gi.country, gi.countryCode, gi.region, di.os, di.browser, di.device, (req.headers.referer||'').slice(0,500)]
+        );
+      }
+    } catch(e) { console.error('Threads track:', e.message); }
     return res.redirect('/');
   }
   // Auto-open page - tries to open Chrome/Safari immediately
@@ -1551,8 +1584,20 @@ a{color:#fff;margin-top:20px}
 </body></html>`);
 });
 
-app.get('/reddit', (req, res) => {
+app.get('/reddit', async (req, res) => {
   if (req.query.browser === '1') {
+    try {
+      if (dbReady) {
+        const ua = (req.headers['user-agent'] || '').slice(0, 500);
+        const di = parseUserAgent(ua, req.headers);
+        const gi = getCountryFromIP(req);
+        await pool.query(
+          `INSERT INTO analytics (slug, source, link_type, link_id, link_title, user_agent, ip_address, country, country_code, region, os, browser, device, referrer)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+          ['main', 'reddit', 'visit', 'reddit-escape', 'Reddit → Site', ua, gi.ip, gi.country, gi.countryCode, gi.region, di.os, di.browser, di.device, (req.headers.referer||'').slice(0,500)]
+        );
+      }
+    } catch(e) { console.error('Reddit track:', e.message); }
     return res.redirect('/');
   }
   res.send(`<!DOCTYPE html>
@@ -1707,8 +1752,8 @@ app.get('/:source', async (req, res, next) => {
   if (req.query.browser === '1') {
     try {
       // Geo check - block Israel
-      const geoInfo = getCountryFromIP(req);
-      if (geoInfo.countryCode === 'IL') {
+      const geoInfo2 = getCountryFromIP(req);
+      if (geoInfo2.countryCode === 'IL') {
         return res.redirect(302, 'https://www.google.com');
       }
 
@@ -1723,6 +1768,25 @@ app.get('/:source', async (req, res, next) => {
       // Find OnlyFans link (primary destination)
       const onlyfansLink = socials.find(s => s.type === 'onlyfans');
       const targetUrl = onlyfansLink?.url || (data.featured?.[0]?.url) || '/';
+
+      // Track visit for ESCAPE PAGE flows (Snapchat, Reddit, Facebook, Threads)
+      // These never show the landing page so client-side tracking doesn't exist
+      // In-app overlay clicks (Instagram/TikTok) are already tracked client-side via trackClick()
+      if (platform) {
+        try {
+          const user_agent = (req.headers['user-agent'] || '').slice(0, 500);
+          const deviceInfo = parseUserAgent(user_agent, req.headers);
+          const geoClick = getCountryFromIP(req);
+          const referrer = (req.headers.referer || '').slice(0, 500);
+          await pool.query(
+            `INSERT INTO analytics (slug, source, link_type, link_id, link_title, user_agent, ip_address, country, country_code, region, os, browser, device, referrer)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+            ['main', cleanSource, 'visit', 'platform-escape', platform + ' → OnlyFans', user_agent, geoClick.ip, geoClick.country, geoClick.countryCode, geoClick.region, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
+          );
+        } catch (trackErr) {
+          console.error('Escape tracking error:', trackErr.message);
+        }
+      }
 
       // Direct redirect to OnlyFans - no extra screen
       return res.redirect(302, targetUrl);
@@ -1828,7 +1892,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
     const redirectUrl = f.url ? buildRedirectUrl(f.url, 'featured', f.title) : null;
     const cardContent = `<div class="feat-card-display" style="${imgBg}"><div class="feat-overlay"><div class="feat-icon" style="background:${f.color || '#667eea'}"><svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#fff"><circle cx="12" cy="12" r="10"/></svg></div><span class="feat-title">${esc(f.title)}</span></div></div>`;
     if (redirectUrl) {
-      return `<a href="${esc(redirectUrl)}" class="feat-link" rel="noopener">${cardContent}</a>`;
+      return `<a href="${esc(redirectUrl)}" class="feat-link" data-title="${esc(f.title)}" rel="noopener">${cardContent}</a>`;
     }
     return `<div class="feat-link">${cardContent}</div>`;
   }).join('');
@@ -1839,7 +1903,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
     const redirectUrl = c.url ? buildRedirectUrl(c.url, 'carousel', c.title) : null;
     const cardContent = `<div class="car-card" style="background:${c.grad || 'linear-gradient(135deg,#667eea,#764ba2)'}"><div class="car-icon">${svg}</div><div class="car-title">${esc(c.title)}</div><div class="car-sub">${esc(c.sub || '')}</div></div>`;
     if (redirectUrl) {
-      return `<a href="${esc(redirectUrl)}" class="car-link" rel="noopener">${cardContent}</a>`;
+      return `<a href="${esc(redirectUrl)}" class="car-link" data-title="${esc(c.title)}" rel="noopener">${cardContent}</a>`;
     }
     return `<div class="car-link">${cardContent}</div>`;
   }).join('');
@@ -1879,6 +1943,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   <meta name="twitter:description" content="${esc(description)}">
   ${p.avatarUrl ? `<meta name="twitter:image" content="${esc(p.avatarUrl)}">` : ''}
   <link rel="icon" href="/favicon.ico">
+  <script>window.__SOURCE__='${source || ''}';</script>
   <script id="early-deeplink-detect">
   (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';var ref=document.referrer||'';window.__IS_THREADS__=ua.indexOf('Threads')!==-1||ua.indexOf('Barcelona')!==-1||ref.indexOf('threads.net')!==-1;window.__IS_TWITTER__=ua.indexOf('Twitter')!==-1||ua.indexOf('TwitterAndroid')!==-1||ref.indexOf('t.co')!==-1||ref.indexOf('twitter.com')!==-1||ref.indexOf('x.com')!==-1;window.__IS_INAPP__=!window.__IS_THREADS__&&!window.__IS_TWITTER__&&(ua.indexOf('Instagram')!==-1||ua.indexOf('FBAN')!==-1||ua.indexOf('FBAV')!==-1||ua.indexOf('TikTok')!==-1||ua.indexOf('LinkedInApp')!==-1);window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua);if(window.__IS_THREADS__){try{var url=new URL(window.location.href);if(!url.searchParams.has('browser')){url.searchParams.set('browser','1');history.replaceState(null,'',url.toString())}}catch(e){}}}catch(e){}})();
   </script>
@@ -2002,6 +2067,27 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   </div>
 
   <script>
+    // Click tracking helper - fire and forget, works even when page is closing
+    function trackClick(type, title) {
+      var payload = {link_type: type, link_id: title || 'unknown', link_title: title || 'Link'};
+      if (window.__SOURCE__) payload.source = window.__SOURCE__;
+      var data = JSON.stringify(payload);
+      // Try fetch with keepalive first (most reliable for JSON)
+      try {
+        fetch('/api/analytics/click', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: data,
+          keepalive: true
+        }).catch(function(){});
+      } catch(e) {
+        // Fallback to sendBeacon (works even during page unload)
+        try {
+          navigator.sendBeacon('/api/analytics/click', new Blob([data], {type: 'application/json'}));
+        } catch(e2) {}
+      }
+    }
+
     // In-app browser: Show landing page first, overlay only when clicking links
     (function(){
       var isInApp=window.__IS_INAPP__;
@@ -2028,11 +2114,16 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
         var isCarousel=link.classList.contains('car-link')||link.closest('.car-link');
         if(!isFeatured&&!isCarousel)return;
 
+        // Track the click BEFORE blocking (in-app never hits /go/, so track here)
+        var type=isFeatured?'featured':isCarousel?'carousel':'social';
+        var title=link.getAttribute('data-title')||link.textContent.trim().slice(0,100)||'Link';
+        trackClick(type, title);
+
         // Block the click and show overlay
         e.preventDefault();
         e.stopPropagation();
 
-        // Change URL to include browser=1 so when Safari opens, it shows Screen 2
+        // Change URL to include browser=1 so when Safari opens, it redirects to OnlyFans
         try{
           var url=new URL(window.location.href);
           if(!url.searchParams.has('browser')){
@@ -2051,6 +2142,9 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
     // Twitter/X: Auto-escape after page loads (shows landing page briefly, then triggers "Open in Safari?")
     (function(){
       if(!window.__IS_TWITTER__)return;
+
+      // Track the Twitter visit before escaping
+      trackClick('redirect', 'Twitter Auto-Open');
 
       // Wait for page to render, then trigger browser escape
       setTimeout(function(){

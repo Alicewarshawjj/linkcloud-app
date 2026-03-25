@@ -155,8 +155,16 @@
         .stat-change.down{color:#ef4444}
 
         /* Chart Section */
-        .chart-section{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:24px;margin-bottom:28px}
+        .charts-row{display:grid;grid-template-columns:1fr;gap:20px;margin-bottom:20px}
+        .charts-row.charts-top{grid-template-columns:2fr 1fr}
+        .charts-row.charts-bottom{grid-template-columns:repeat(3,1fr)}
+        @media(max-width:1200px){.charts-row.charts-top,.charts-row.charts-bottom{grid-template-columns:1fr 1fr}}
+        @media(max-width:900px){.charts-row{grid-template-columns:1fr!important}}
+        .chart-section{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:24px}
+        .chart-section.chart-main{min-height:340px}
+        .chart-section.chart-small{min-height:280px}
         .chart-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+        .chart-container-small{height:200px;position:relative}
         .chart-title{font-size:16px;font-weight:700;color:#fff}
         .chart-legend{display:flex;gap:16px}
         .legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:#888}
@@ -299,6 +307,16 @@
         .source-btn.delete{background:rgba(255,71,87,.1);color:#ff4757}
         .source-btn.delete:hover{background:rgba(255,71,87,.2)}
         .no-sources{text-align:center;padding:40px;color:#666;font-size:14px}
+        .source-stats{display:flex;gap:8px;margin-top:4px}
+        .source-stat{font-size:11px;color:#888;background:rgba(255,255,255,.04);padding:2px 8px;border-radius:6px}
+        .source-stat strong{color:#bbb}
+        .links-breakdown{margin-top:20px}
+        .links-breakdown-title{font-size:14px;font-weight:700;color:#bbb;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+        .breakdown-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.02);border-radius:8px;margin-bottom:6px}
+        .breakdown-source{font-size:11px;color:#667eea;background:rgba(102,126,234,.1);padding:2px 8px;border-radius:4px;white-space:nowrap}
+        .breakdown-link{flex:1;font-size:13px;color:#ddd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .breakdown-type{font-size:10px;color:#888;text-transform:uppercase}
+        .breakdown-clicks{font-size:14px;font-weight:700;color:#fff}
 
         /* Responsive */
         @media(max-width:768px){
@@ -551,8 +569,8 @@
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon blue">🔗</div>
-                        <div class="stat-value" id="statSocialClicks">-</div>
-                        <div class="stat-label">Social Clicks</div>
+                        <div class="stat-value" id="statRedirectClicks">-</div>
+                        <div class="stat-label">Redirect Clicks</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon green">⭐</div>
@@ -566,16 +584,61 @@
                     </div>
                 </div>
 
-                <!-- Chart Section -->
-                <div class="chart-section">
-                    <div class="chart-header">
-                        <div class="chart-title">Click Trends</div>
-                        <div class="chart-legend">
-                            <div class="legend-item"><div class="legend-dot" style="background:#667eea"></div> Clicks</div>
+                <!-- Charts Section -->
+                <div class="charts-row charts-top">
+                    <!-- Main Clicks Chart -->
+                    <div class="chart-section chart-main">
+                        <div class="chart-header">
+                            <div class="chart-title">📈 Daily Click Trends</div>
+                            <div class="chart-legend">
+                                <div class="legend-item"><div class="legend-dot" style="background:#667eea"></div> Total Clicks</div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="clicksChart"></canvas>
                         </div>
                     </div>
-                    <div class="chart-container">
-                        <canvas id="clicksChart"></canvas>
+
+                    <!-- Click Types Chart -->
+                    <div class="chart-section chart-small">
+                        <div class="chart-header">
+                            <div class="chart-title">📊 Clicks by Type</div>
+                        </div>
+                        <div class="chart-container-small">
+                            <canvas id="typesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="charts-row charts-bottom">
+                    <!-- Traffic Sources Doughnut -->
+                    <div class="chart-section chart-small">
+                        <div class="chart-header">
+                            <div class="chart-title">🌐 Traffic Sources</div>
+                        </div>
+                        <div class="chart-container-small">
+                            <canvas id="sourcesChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Devices Doughnut -->
+                    <div class="chart-section chart-small">
+                        <div class="chart-header">
+                            <div class="chart-title">📱 Devices</div>
+                        </div>
+                        <div class="chart-container-small">
+                            <canvas id="devicesChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Countries Bar -->
+                    <div class="chart-section chart-small">
+                        <div class="chart-header">
+                            <div class="chart-title">🌍 Top Countries</div>
+                        </div>
+                        <div class="chart-container-small">
+                            <canvas id="countriesChart"></canvas>
+                        </div>
                     </div>
                 </div>
 
@@ -609,6 +672,16 @@
                             <div class="analytics-card-title"><span>📍</span> Traffic Sources</div>
                         </div>
                         <div id="sourcesContent">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+
+                    <!-- Links Per Source Breakdown -->
+                    <div class="analytics-card" style="margin-top:20px">
+                        <div class="analytics-card-header">
+                            <div class="analytics-card-title"><span>📊</span> Links Per Source</div>
+                        </div>
+                        <div id="linksPerSourceContent">
                             <div class="spinner"></div>
                         </div>
                     </div>
@@ -739,6 +812,10 @@ let isDirty = false;
 let currentTimeRange = '30d';
 let analyticsData = null;
 let clicksChart = null;
+let typesChart = null;
+let sourcesChart = null;
+let devicesChart = null;
+let countriesChart = null;
 let trafficSources = [];
 const SITE_URL = 'https://cmehere.net';
 
@@ -864,14 +941,18 @@ function renderAnalytics(days) {
 
     // Stats
     document.getElementById('statTotalClicks').textContent = formatNumber(data.total || 0);
-    document.getElementById('statSocialClicks').textContent = formatNumber(byTypeObj.social || 0);
+    document.getElementById('statRedirectClicks').textContent = formatNumber(byTypeObj.redirect || 0);
     document.getElementById('statFeaturedClicks').textContent = formatNumber(byTypeObj.featured || 0);
     document.getElementById('statCarouselClicks').textContent = formatNumber(byTypeObj.carousel || 0);
 
-    // Chart - API returns 'daily' not 'byDay'
+    // Charts - API returns 'daily' not 'byDay'
     renderChart(data.daily || [], days);
+    renderTypesChart(data.byType || []);
+    renderSourcesChart(data.bySource || []);
+    renderDevicesChartVisual(data.byDevice || []);
+    renderCountriesChart(data.byCountry || []);
 
-    // Countries
+    // Countries Table
     renderCountries(data.byCountry || []);
 
     // Devices - convert array to object
@@ -897,6 +978,9 @@ function renderAnalytics(days) {
 
     // Traffic Sources
     renderSourcesAnalytics(data.bySource || []);
+
+    // Links Per Source Breakdown
+    renderLinksPerSource(data.linksPerSource || []);
 }
 
 function formatNumber(num) {
@@ -906,10 +990,12 @@ function formatNumber(num) {
 }
 
 function renderChart(byDay, days) {
-    const ctx = document.getElementById('clicksChart').getContext('2d');
+    const canvas = document.getElementById('clicksChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
 
     if (clicksChart) {
-        clicksChart.destroy();
+        try { clicksChart.destroy(); } catch(e) {}
     }
 
     // Generate labels for the time period
@@ -971,6 +1057,213 @@ function renderChart(byDay, days) {
             interaction: {
                 intersect: false,
                 mode: 'index'
+            }
+        }
+    });
+}
+
+function renderTypesChart(byType) {
+    const ctx = document.getElementById('typesChart');
+    if (!ctx) return;
+
+    if (typesChart) typesChart.destroy();
+
+    const typeObj = {};
+    (byType || []).forEach(t => {
+        typeObj[t.link_type] = parseInt(t.clicks) || 0;
+    });
+
+    const labels = ['Featured', 'Carousel', 'Redirect', 'Visit'];
+    const data = [typeObj.featured || 0, typeObj.carousel || 0, typeObj.redirect || 0, typeObj.visit || 0];
+    const colors = ['#764ba2', '#f093fb', '#4facfe', '#43e97b'];
+
+    typesChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors,
+                borderRadius: 8,
+                borderSkipped: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {display: false}
+            },
+            scales: {
+                x: {
+                    grid: {display: false},
+                    ticks: {color: '#888'}
+                },
+                y: {
+                    grid: {color: 'rgba(255,255,255,0.03)'},
+                    ticks: {color: '#666'},
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+function renderSourcesChart(sources) {
+    const ctx = document.getElementById('sourcesChart');
+    if (!ctx) return;
+
+    if (sourcesChart) sourcesChart.destroy();
+
+    if (!sources || !sources.length) {
+        sourcesChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {labels: ['No data'], datasets: [{data: [1], backgroundColor: ['#333']}]},
+            options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}}
+        });
+        return;
+    }
+
+    const top5 = sources.slice(0, 5);
+    const labels = top5.map(s => s.source || 'Direct');
+    const data = top5.map(s => parseInt(s.clicks) || 0);
+    const colors = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b'];
+
+    sourcesChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors,
+                borderWidth: 0,
+                spacing: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '60%',
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#888',
+                        boxWidth: 12,
+                        padding: 8,
+                        font: {size: 11}
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderDevicesChartVisual(devices) {
+    const ctx = document.getElementById('devicesChart');
+    if (!ctx) return;
+
+    if (devicesChart) devicesChart.destroy();
+
+    const deviceObj = {};
+    (devices || []).forEach(d => {
+        const key = (d.device || 'Unknown').toLowerCase();
+        deviceObj[key] = parseInt(d.clicks) || 0;
+    });
+
+    const labels = [];
+    const data = [];
+    const iconMap = {mobile: '📱', desktop: '💻', tablet: '📟', unknown: '❓'};
+
+    ['mobile', 'desktop', 'tablet'].forEach(key => {
+        if (deviceObj[key]) {
+            labels.push((iconMap[key] || '') + ' ' + key.charAt(0).toUpperCase() + key.slice(1));
+            data.push(deviceObj[key]);
+        }
+    });
+
+    if (!data.length) {
+        labels.push('No data');
+        data.push(1);
+    }
+
+    const colors = ['#4facfe', '#667eea', '#f093fb'];
+
+    devicesChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors.slice(0, data.length),
+                borderWidth: 0,
+                spacing: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '60%',
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#888',
+                        boxWidth: 12,
+                        padding: 8,
+                        font: {size: 11}
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderCountriesChart(countries) {
+    const ctx = document.getElementById('countriesChart');
+    if (!ctx) return;
+
+    if (countriesChart) countriesChart.destroy();
+
+    const top5 = (countries || []).slice(0, 5);
+    const labels = top5.map(c => c.country_code || c.country || '?');
+    const data = top5.map(c => parseInt(c.clicks) || 0);
+
+    if (!data.length) {
+        labels.push('No data');
+        data.push(0);
+    }
+
+    const colors = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b'];
+
+    countriesChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors,
+                borderRadius: 6,
+                borderSkipped: false
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {display: false}
+            },
+            scales: {
+                x: {
+                    grid: {color: 'rgba(255,255,255,0.03)'},
+                    ticks: {color: '#666'},
+                    beginAtZero: true
+                },
+                y: {
+                    grid: {display: false},
+                    ticks: {color: '#888'}
+                }
             }
         }
     });
@@ -1250,6 +1543,61 @@ function renderSourcesAnalytics(sources) {
             </div>`;
     });
 
+    container.innerHTML = html;
+}
+
+function renderLinksPerSource(linksPerSource) {
+    const container = document.getElementById('linksPerSourceContent');
+    if (!container) return;
+
+    if (!linksPerSource || !linksPerSource.length) {
+        container.innerHTML = `<div class="empty-state"><div class="icon">📊</div><h4>No link data per source yet</h4><p>Click data per source will appear here</p></div>`;
+        return;
+    }
+
+    // Group by source
+    const grouped = {};
+    linksPerSource.forEach(row => {
+        const src = row.source || 'Direct';
+        if (!grouped[src]) grouped[src] = [];
+        grouped[src].push(row);
+    });
+
+    let html = '<div class="links-breakdown">';
+
+    Object.keys(grouped).forEach(source => {
+        const links = grouped[source];
+        const totalForSource = links.reduce((sum, l) => sum + parseInt(l.clicks), 0);
+        const icon = getSourceIcon(source);
+
+        html += `<div style="margin-bottom:16px">
+            <div class="links-breakdown-title">
+                <span style="font-size:16px">${icon.emoji}</span>
+                ${source}
+                <span style="font-size:12px;color:#888;font-weight:400">(${totalForSource} clicks)</span>
+            </div>`;
+
+        links.forEach(link => {
+            const typeColors = {
+                featured: '#667eea',
+                carousel: '#764ba2',
+                social: '#2ed573',
+                redirect: '#ffa502',
+                visit: '#1e90ff'
+            };
+            const color = typeColors[link.link_type] || '#888';
+
+            html += `<div class="breakdown-item">
+                <div class="breakdown-source" style="background:${color}22;color:${color}">${link.link_type}</div>
+                <div class="breakdown-link">${link.link_title}</div>
+                <div class="breakdown-clicks">${link.clicks}</div>
+            </div>`;
+        });
+
+        html += '</div>';
+    });
+
+    html += '</div>';
     container.innerHTML = html;
 }
 
@@ -1698,7 +2046,7 @@ function saveSources() {
     localStorage.setItem('trafficSources', JSON.stringify(trafficSources));
 }
 
-function renderSources() {
+async function renderSources() {
     const container = document.getElementById('sourcesList');
 
     if (trafficSources.length === 0) {
@@ -1706,9 +2054,22 @@ function renderSources() {
         return;
     }
 
+    // Fetch click stats per source
+    let sourceClicks = {};
+    try {
+        const res = await fetch('/api/analytics/stats?days=30', { credentials: 'same-origin' });
+        if (res.ok) {
+            const stats = await res.json();
+            (stats.bySource || []).forEach(s => {
+                sourceClicks[(s.source || '').toLowerCase()] = parseInt(s.clicks);
+            });
+        }
+    } catch(e) {}
+
     container.innerHTML = trafficSources.map(source => {
         const link = `${SITE_URL}/${source.name}`;
         const isForced = source.forceBrowser || false;
+        const clicks = sourceClicks[source.name.toLowerCase()] || 0;
         return `
             <div class="source-item" data-id="${source.id}">
                 <div class="source-icon ${source.icon}">${getSourceEmoji(source.icon)}</div>
@@ -1717,6 +2078,9 @@ function renderSources() {
                            onchange="updateSourceName(${source.id}, this.value)"
                            placeholder="Source name...">
                     <div class="source-link" onclick="copySourceLink('${link}')">${link}</div>
+                    <div class="source-stats">
+                        <span class="source-stat"><strong>${clicks}</strong> clicks (30d)</span>
+                    </div>
                 </div>
                 <label class="force-browser-toggle" title="Enable for Reddit, Threads, etc.">
                     <input type="checkbox" ${isForced ? 'checked' : ''} onchange="toggleForceBrowser(${source.id}, this.checked)">
