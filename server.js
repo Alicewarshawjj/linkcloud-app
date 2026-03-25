@@ -1733,52 +1733,51 @@ ${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="sp
 }
 
 // TikTok-specific escape page
-// Same design as other platforms but with TikTok-specific logic:
-// 1. Auto-try escape (x-safari iOS 17+, com-apple-mobilesafari-tab older iOS, intent Android)
-// 2. If blocked (TikTok often blocks), show instructions to tap ⋯ → Open in browser
-// 3. Copy link as final fallback
+// Identical design to the Instagram in-app overlay (18+ Warning screen)
+// but with TikTok escape logic: x-safari (iOS 17+), mobilesafari-tab (older iOS), intent (Android)
 function generateTikTokEscapePage(source) {
   return `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Opening...</title>
+<title>Content Warning</title>
 <style>
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#000;color:#fff}
-.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-p{margin-top:20px;opacity:0.7;text-align:center;padding:0 20px}
-a{color:#fff;margin-top:20px}
-.fallback{display:none;text-align:center;padding:0 24px;max-width:380px}
-.fallback.show{display:block}
-.fallback-title{font-size:18px;font-weight:700;margin-bottom:16px;opacity:1}
-.fallback-instruction{font-size:15px;line-height:1.6;margin-bottom:20px;opacity:.8}
-.fallback-instruction b{opacity:1;color:#fff}
-.dots-highlight{display:inline-block;background:rgba(255,255,255,.15);padding:2px 10px;border-radius:6px;font-size:18px;letter-spacing:3px;font-weight:900}
-.fallback-or{opacity:.4;margin:16px 0;font-size:12px}
-.copy-btn{display:block;width:100%;padding:14px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:12px;color:#fff;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px;transition:all .2s}
-.copy-btn:active{transform:scale(.97)}
-.copy-btn.copied{background:rgba(46,213,115,.2);border-color:#2ed573}
-.open-btn{display:block;width:100%;padding:14px;background:linear-gradient(135deg,#667eea,#764ba2);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:all .2s}
-.open-btn:active{transform:scale(.97)}
-.link-text{margin-top:12px;padding:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;font-size:11px;opacity:.4;word-break:break-all;-webkit-user-select:all;user-select:all}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:rgba(0,0,0,.92);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.backdrop{position:fixed;top:0;left:0;right:0;bottom:0;backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px)}
+.x-icon{position:fixed;top:48px;left:16px;z-index:10000;width:28px;height:28px;stroke:#666;stroke-width:2;fill:none}
+.tooltip{position:fixed;top:48px;right:50px;z-index:10000;background:#fff;color:#000;padding:10px 12px;border-radius:10px;font-size:11px;font-weight:600;line-height:1.3;text-align:right;box-shadow:0 4px 20px rgba(0,0,0,.5)}
+.tooltip::after{content:'';position:absolute;top:50%;right:-8px;transform:translateY(-50%);border:8px solid transparent;border-left-color:#fff}
+.tooltip .dots{font-weight:900;letter-spacing:1px}
+.content{position:relative;z-index:10001;text-align:center;padding:0 32px;color:#fff}
+.icon{margin-bottom:20px}
+.icon svg{width:48px;height:48px;stroke:#fff;stroke-width:1.5;fill:none}
+.title{font-size:22px;font-weight:600;margin-bottom:12px;color:#fff}
+.subtitle{font-size:15px;color:rgba(255,255,255,.6);line-height:1.5;margin-bottom:36px}
+.instructions{text-align:left;max-width:300px;margin:0 auto}
+.instructions-title{font-size:15px;font-weight:700;color:#fff;margin-bottom:14px}
+.step{font-size:14px;color:rgba(255,255,255,.8);margin-bottom:8px;padding-left:4px}
 </style>
 </head><body>
-<div id="loading">
-  <div class="spinner"></div>
-  <p id="status">Opening in browser...</p>
-  <a href="/${source}?browser=1">Tap here if nothing happens</a>
+<div class="backdrop"></div>
+<svg class="x-icon" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+<div class="tooltip">
+  Click <span class="dots">&bull;&bull;&bull;</span><br>to open in<br>external browser
 </div>
-<div id="fallback" class="fallback">
-  <p class="fallback-title">Open in your browser</p>
-  <p class="fallback-instruction">
-    Tap <span class="dots-highlight">⋯</span> at the top right<br>
-    then select <b>"Open in browser"</b>
-  </p>
-  <p class="fallback-or">— or —</p>
-  <button class="copy-btn" id="copyBtn" onclick="copyLink()">📋 Copy Link</button>
-  <button class="open-btn" onclick="tryEscape()">🌐 Try Open in Browser</button>
-  <div class="link-text" id="linkText"></div>
+<div class="content">
+  <div class="icon">
+    <svg viewBox="0 0 24 24">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  </div>
+  <h2 class="title">18+ Content Warning</h2>
+  <p class="subtitle">This link may contain<br>graphic or adult content.</p>
+  <div class="instructions">
+    <p class="instructions-title">To visit this link</p>
+    <p class="step">1. Tap the three dots on the top right.</p>
+    <p class="step">2. Select "Open in external browser"</p>
+  </div>
 </div>
 <script>
 (function(){
@@ -1789,8 +1788,6 @@ a{color:#fff;margin-top:20px}
   var isAndroid=/Android/i.test(ua);
   var escaped=false;
 
-  document.getElementById('linkText').textContent=url;
-
   function getIOSVersion(){
     var m=ua.match(/OS (\\d+)_/);
     return m?parseInt(m[1],10):0;
@@ -1800,7 +1797,8 @@ a{color:#fff;margin-top:20px}
     if(document.hidden)escaped=true;
   });
 
-  window.tryEscape=function(){
+  // Try auto-escape in background after 1s
+  setTimeout(function(){
     var stripped=url.replace(/^https?:\\/\\//,'');
     if(isIOS){
       var v=getIOSVersion();
@@ -1814,33 +1812,8 @@ a{color:#fff;margin-top:20px}
       },600);
     }else if(isAndroid){
       try{location.href='intent://'+stripped+'#Intent;scheme=https;S.browser_fallback_url='+encodeURIComponent(url)+';end;'}catch(e){}
-    }else{
-      location.href=url;
     }
-  };
-
-  window.copyLink=function(){
-    var btn=document.getElementById('copyBtn');
-    function ok(){btn.textContent='✅ Copied! Paste in Safari/Chrome';btn.classList.add('copied');setTimeout(function(){btn.textContent='📋 Copy Link';btn.classList.remove('copied')},4000)}
-    if(navigator.clipboard&&navigator.clipboard.writeText){
-      navigator.clipboard.writeText(url).then(ok).catch(function(){
-        var ta=document.createElement('textarea');ta.value=url;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.focus();ta.select();try{document.execCommand('copy');ok()}catch(e){}document.body.removeChild(ta);
-      });
-    }else{
-      var ta=document.createElement('textarea');ta.value=url;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.focus();ta.select();try{document.execCommand('copy');ok()}catch(e){}document.body.removeChild(ta);
-    }
-  };
-
-  // Auto-try escape immediately
-  tryEscape();
-
-  // If still here after 2.5s, TikTok blocked it - show fallback instructions
-  setTimeout(function(){
-    if(!escaped&&!document.hidden){
-      document.getElementById('loading').style.display='none';
-      document.getElementById('fallback').classList.add('show');
-    }
-  },2500);
+  },1000);
 })();
 </script>
 </body></html>`;
