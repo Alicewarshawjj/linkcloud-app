@@ -1650,9 +1650,9 @@ const SOURCE_PLATFORM_MAP = {
   // Facebook sources - use auto-open escape
   'fb': 'facebook',
   'seemorefb': 'facebook',
-  // TikTok sources - use TikTok-specific escape (hardest in-app browser)
-  'tt': 'tiktok',
-  'seemortt': 'tiktok'
+  // TikTok sources - render normal landing page (escape handled client-side)
+  // Bot crawlers get sanitized content via isBotRequest in renderProfilePage()
+  // 'tt' and 'seemortt' intentionally NOT mapped - they go through normal profile render
 };
 
 // Auto-open escape page generator (works for Reddit, Threads, Snapchat, etc.)
@@ -1930,8 +1930,29 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   const cars = isGeoBlocked ? [] : (data.carousel || data.cars || []);
   const esc = s => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+  // Sanitize text for bot crawlers - replace flagged keywords with neutral alternatives
+  // TikTok, Facebook, Instagram crawlers scan for adult/platform-specific terms and block links
+  const sanitize = isBotRequest ? (text) => {
+    if (!text) return text;
+    return text
+      .replace(/OnlyFans/gi, 'Exclusive Content')
+      .replace(/onlyfans/gi, 'exclusive content')
+      .replace(/18\+/g, '')
+      .replace(/adult/gi, 'premium')
+      .replace(/explicit/gi, 'premium')
+      .replace(/nsfw/gi, '')
+      .replace(/graphic/gi, '')
+      .replace(/xxx/gi, '')
+      .replace(/porn/gi, '')
+      .replace(/nude/gi, '')
+      .replace(/naked/gi, '')
+      .replace(/sexy/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  } : (text) => text;
+
   const TYPES = {
-    onlyfans:{n:'OnlyFans',bg:'#003CFF'},instagram:{n:'Instagram',bg:'linear-gradient(45deg,#F77737,#FD1D1D 50%,#833AB4)'},instagram2:{n:'Instagram 2',bg:'linear-gradient(135deg,#F77737,#FD1D1D 50%,#C13584)'},tiktok:{n:'TikTok',bg:'linear-gradient(135deg,#25F4EE,#FD1D1D)'},snapchat:{n:'Snapchat',bg:'#FFFC00'},twitter:{n:'X / Twitter',bg:'#1a1a1a'},youtube:{n:'YouTube',bg:'#FF0000'},website:{n:'Website',bg:'#7B7B7B'},amazon:{n:'Amazon',bg:'#FF9500'},amazon2:{n:'Amazon 2',bg:'#FF7500'},facebook:{n:'Facebook',bg:'#1877F2'},linkedin:{n:'LinkedIn',bg:'#0A66C2'},spotify:{n:'Spotify',bg:'#1DB954'},telegram:{n:'Telegram',bg:'#26A5E4'},whatsapp:{n:'WhatsApp',bg:'#25D366'},pinterest:{n:'Pinterest',bg:'#E60023'},twitch:{n:'Twitch',bg:'#9146FF'},discord:{n:'Discord',bg:'#5865F2'},email:{n:'Email',bg:'#EA4335'},phone:{n:'Phone',bg:'#34C759'}
+    onlyfans:{n: isBotRequest ? 'Exclusive Content' : 'OnlyFans',bg:'#003CFF'},instagram:{n:'Instagram',bg:'linear-gradient(45deg,#F77737,#FD1D1D 50%,#833AB4)'},instagram2:{n:'Instagram 2',bg:'linear-gradient(135deg,#F77737,#FD1D1D 50%,#C13584)'},tiktok:{n:'TikTok',bg:'linear-gradient(135deg,#25F4EE,#FD1D1D)'},snapchat:{n:'Snapchat',bg:'#FFFC00'},twitter:{n:'X / Twitter',bg:'#1a1a1a'},youtube:{n:'YouTube',bg:'#FF0000'},website:{n:'Website',bg:'#7B7B7B'},amazon:{n:'Amazon',bg:'#FF9500'},amazon2:{n:'Amazon 2',bg:'#FF7500'},facebook:{n:'Facebook',bg:'#1877F2'},linkedin:{n:'LinkedIn',bg:'#0A66C2'},spotify:{n:'Spotify',bg:'#1DB954'},telegram:{n:'Telegram',bg:'#26A5E4'},whatsapp:{n:'WhatsApp',bg:'#25D366'},pinterest:{n:'Pinterest',bg:'#E60023'},twitch:{n:'Twitch',bg:'#9146FF'},discord:{n:'Discord',bg:'#5865F2'},email:{n:'Email',bg:'#EA4335'},phone:{n:'Phone',bg:'#34C759'}
   };
   const SVG = {
     onlyfans:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="white" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="white"/></svg>',
@@ -1967,7 +1988,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
     if (!url) return null;
     const encrypted = encodeLink(url);
     // Pass type, title, and source as query params for analytics (not sensitive)
-    const params = new URLSearchParams({ t: type, n: title || '' });
+    const params = new URLSearchParams({ t: type, n: sanitize(title || '') });
     if (source) params.set('s', source);  // Add traffic source if present
     return `/go/${encrypted}?${params.toString()}`;
   };
@@ -1988,10 +2009,11 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
     const posX = f.posX !== undefined ? f.posX : 50;
     const posY = f.posY !== undefined ? f.posY : 50;
     const imgBg = f.imgUrl ? `background-image:url('${f.imgUrl}');background-size:cover;background-position:${posX}% ${posY}%;` : `background:linear-gradient(135deg,${f.color || '#667eea'},${f.color || '#764ba2'}80);`;
+    const safeTitle = sanitize(f.title);
     const redirectUrl = f.url ? buildRedirectUrl(f.url, 'featured', f.title) : null;
-    const cardContent = `<div class="feat-card-display" style="${imgBg}"><div class="feat-overlay"><div class="feat-icon" style="background:${f.color || '#667eea'}"><svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#fff"><circle cx="12" cy="12" r="10"/></svg></div><span class="feat-title">${esc(f.title)}</span></div></div>`;
+    const cardContent = `<div class="feat-card-display" style="${imgBg}"><div class="feat-overlay"><div class="feat-icon" style="background:${f.color || '#667eea'}"><svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#fff"><circle cx="12" cy="12" r="10"/></svg></div><span class="feat-title">${esc(safeTitle)}</span></div></div>`;
     if (redirectUrl) {
-      return `<a href="${esc(redirectUrl)}" class="feat-link" data-title="${esc(f.title)}" rel="noopener">${cardContent}</a>`;
+      return `<a href="${esc(redirectUrl)}" class="feat-link" data-title="${esc(safeTitle)}" rel="noopener">${cardContent}</a>`;
     }
     return `<div class="feat-link">${cardContent}</div>`;
   }).join('');
@@ -1999,10 +2021,12 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   // Carousel HTML with encrypted server-side redirects
   const carsHTML = cars.map((c, idx) => {
     const svg = SVG[c.icon] || SVG.website || '';
+    const safeTitle = sanitize(c.title);
+    const safeSub = sanitize(c.sub || '');
     const redirectUrl = c.url ? buildRedirectUrl(c.url, 'carousel', c.title) : null;
-    const cardContent = `<div class="car-card" style="background:${c.grad || 'linear-gradient(135deg,#667eea,#764ba2)'}"><div class="car-icon">${svg}</div><div class="car-title">${esc(c.title)}</div><div class="car-sub">${esc(c.sub || '')}</div></div>`;
+    const cardContent = `<div class="car-card" style="background:${c.grad || 'linear-gradient(135deg,#667eea,#764ba2)'}"><div class="car-icon">${svg}</div><div class="car-title">${esc(safeTitle)}</div><div class="car-sub">${esc(safeSub)}</div></div>`;
     if (redirectUrl) {
-      return `<a href="${esc(redirectUrl)}" class="car-link" data-title="${esc(c.title)}" rel="noopener">${cardContent}</a>`;
+      return `<a href="${esc(redirectUrl)}" class="car-link" data-title="${esc(safeTitle)}" rel="noopener">${cardContent}</a>`;
     }
     return `<div class="car-link">${cardContent}</div>`;
   }).join('');
@@ -2017,8 +2041,10 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   const coverHTML = p.coverUrl ? `<img src="${esc(p.coverUrl)}" alt="Cover" class="cover-img" style="object-position:${coverPosX}% ${coverPosY}%">` : `<div class="cover-gradient"></div>`;
   const avatarHTML = p.avatarUrl ? `<img src="${esc(p.avatarUrl)}" alt="${esc(p.name)}" class="avatar-img" style="object-position:${avatarPosX}% ${avatarPosY}%">` : `<div class="avatar-placeholder"></div>`;
 
-  const title = seo.title || p.name || 'cmehere.net';
-  const description = seo.description || p.bio || '';
+  const rawTitle = seo.title || p.name || 'cmehere.net';
+  const rawDescription = seo.description || p.bio || '';
+  const title = sanitize(rawTitle);
+  const description = sanitize(rawDescription);
 
   // Site URL for meta tags
   const siteUrl = 'https://cmehere.net';
@@ -2030,6 +2056,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${esc(title)}</title>
   <meta name="description" content="${esc(description)}">
+  ${isBotRequest ? '<meta name="robots" content="noindex, nofollow">' : ''}
   <link rel="canonical" href="${siteUrl}/">
   <meta property="og:url" content="${siteUrl}/">
   <meta property="og:title" content="${esc(title)}">
@@ -2158,8 +2185,8 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
       </div>
     </div>
     <div class="profile-info animate delay-2">
-      <h1 class="profile-name">${esc(p.name || '')}</h1>
-      ${p.bio ? `<p class="profile-bio">${esc(p.bio)}</p>` : ''}
+      <h1 class="profile-name">${esc(sanitize(p.name || ''))}</h1>
+      ${p.bio ? `<p class="profile-bio">${esc(sanitize(p.bio))}</p>` : ''}
     </div>
     ${feats.length ? `<div class="animate delay-3"><div class="section-title">Featured Links</div>${featsHTML}</div>` : ''}
     ${cars.length ? `<div class="animate delay-4"><div class="section-title" style="margin-top:8px">Featured Content</div><div class="carousel">${carsHTML}</div></div>` : ''}
