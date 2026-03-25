@@ -1649,12 +1649,21 @@ const SOURCE_PLATFORM_MAP = {
   'sc': 'snapchat',
   // Facebook sources - use auto-open escape
   'fb': 'facebook',
-  'seemorefb': 'facebook'
+  'seemorefb': 'facebook',
+  // TikTok sources - use TikTok-specific escape (hardest in-app browser)
+  'tt': 'tiktok',
+  'seemortt': 'tiktok'
 };
 
 // Auto-open escape page generator (works for Reddit, Threads, Snapchat, etc.)
 // Snapchat needs delay to allow "Attach to Snap" button to appear
+// TikTok needs special handling - hardest in-app browser to escape
 function generateAutoOpenPage(source, platform) {
+  // TikTok gets its own dedicated escape page
+  if (platform === 'tiktok') {
+    return generateTikTokEscapePage(source);
+  }
+
   // Snapchat needs 3 second delay before escape attempt
   const isSnapchat = platform === 'snapchat';
   const delay = isSnapchat ? 3000 : 100;
@@ -1718,6 +1727,174 @@ ${isSnapchat ? '<div class="countdown" id="countdown">3</div>' : '<div class="sp
     // Immediate escape for other platforms
     doEscape();
   }
+})();
+</script>
+</body></html>`;
+}
+
+// TikTok-specific escape page
+// TikTok's WebView is the hardest to escape - blocks most URL schemes
+// Strategy: Try escape schemes first, then show Copy Link as reliable fallback
+function generateTikTokEscapePage(source) {
+  return `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Open Link</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;background:#000;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+.card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:32px 24px;max-width:360px;width:100%;text-align:center}
+.icon{font-size:48px;margin-bottom:16px}
+h1{font-size:20px;font-weight:700;margin-bottom:8px}
+.sub{color:rgba(255,255,255,.5);font-size:14px;line-height:1.5;margin-bottom:24px}
+.btn{display:block;width:100%;padding:16px;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;border:none;margin-bottom:12px;transition:all .2s}
+.btn:active{transform:scale(0.97)}
+.btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff}
+.btn-secondary{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.15)}
+.btn-copy{background:linear-gradient(135deg,#2ed573,#17c964);color:#fff;font-size:17px;padding:18px}
+.copied{background:linear-gradient(135deg,#1e90ff,#667eea) !important}
+.divider{display:flex;align-items:center;gap:12px;margin:20px 0;color:rgba(255,255,255,.3);font-size:12px}
+.divider::before,.divider::after{content:'';flex:1;border-top:1px solid rgba(255,255,255,.1)}
+.steps{text-align:left;margin-top:20px;padding:16px;background:rgba(255,255,255,.04);border-radius:12px}
+.steps-title{font-size:13px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:12px}
+.step{font-size:13px;color:rgba(255,255,255,.6);margin-bottom:8px;padding-left:4px;line-height:1.4}
+.step:last-child{margin-bottom:0}
+.step b{color:#fff}
+.status{margin-top:16px;font-size:12px;color:rgba(255,255,255,.3)}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hidden{display:none}
+</style>
+</head><body>
+<div class="card">
+  <div class="icon">🔗</div>
+  <h1>Open in Browser</h1>
+  <p class="sub">TikTok's browser can't open this link.<br>Use one of the options below:</p>
+
+  <div id="escapeStatus" class="status"><span class="spinner"></span> Trying to open browser...</div>
+
+  <button class="btn btn-copy" id="copyBtn" onclick="copyLink()">
+    📋 Copy Link
+  </button>
+  <p class="sub" style="margin-bottom:16px;margin-top:4px;font-size:12px">Then paste in Safari or Chrome</p>
+
+  <button class="btn btn-secondary" id="openBtn" onclick="tryEscape()">
+    🌐 Try Open in Browser
+  </button>
+
+  <div class="steps">
+    <div class="steps-title">📱 Manual method:</div>
+    <p class="step">1. Tap <b>"Copy Link"</b> above</p>
+    <p class="step">2. Open <b>Safari</b> or <b>Chrome</b></p>
+    <p class="step">3. Paste the link in the address bar</p>
+    <p class="step">4. Enjoy! 🎉</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  var source='${source}';
+  var targetUrl='https://'+location.hostname+'/'+source+'?browser=1';
+  var isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var isAndroid=/Android/i.test(navigator.userAgent);
+  var escaped=false;
+
+  // Copy link to clipboard
+  window.copyLink=function(){
+    var btn=document.getElementById('copyBtn');
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(targetUrl).then(function(){
+        btn.textContent='✅ Link Copied!';
+        btn.classList.add('copied');
+        setTimeout(function(){btn.textContent='📋 Copy Link';btn.classList.remove('copied')},3000);
+      }).catch(fallbackCopy);
+    }else{
+      fallbackCopy();
+    }
+  };
+
+  function fallbackCopy(){
+    var btn=document.getElementById('copyBtn');
+    var ta=document.createElement('textarea');
+    ta.value=targetUrl;
+    ta.style.cssText='position:fixed;opacity:0';
+    document.body.appendChild(ta);
+    ta.focus();ta.select();
+    try{
+      document.execCommand('copy');
+      btn.textContent='✅ Link Copied!';
+      btn.classList.add('copied');
+      setTimeout(function(){btn.textContent='📋 Copy Link';btn.classList.remove('copied')},3000);
+    }catch(e){
+      btn.textContent='❌ Copy failed - long press the link below';
+    }
+    document.body.removeChild(ta);
+  }
+
+  // Try browser escape schemes
+  window.tryEscape=function(){
+    var status=document.getElementById('escapeStatus');
+    status.innerHTML='<span class="spinner"></span> Attempting escape...';
+    status.classList.remove('hidden');
+
+    if(isIOS){
+      // TikTok iOS: try x-safari first, then googlechrome
+      try{location.href='x-safari-https://'+targetUrl.replace(/^https?:\\/\\//,'')}catch(e){}
+      setTimeout(function(){
+        try{location.href='googlechrome://'+targetUrl.replace(/^https?:\\/\\//,'')}catch(e){}
+      },600);
+      // Fallback: try window.open
+      setTimeout(function(){
+        try{window.open(targetUrl,'_system')}catch(e){}
+      },1200);
+    }else if(isAndroid){
+      // TikTok Android: intent to Chrome, then generic intent, then window.open
+      try{
+        location.href='intent://'+location.hostname+'/'+source+'?browser=1#Intent;scheme=https;package=com.android.chrome;end';
+      }catch(e){}
+      setTimeout(function(){
+        try{
+          location.href='intent://'+location.hostname+'/'+source+'?browser=1#Intent;scheme=https;action=android.intent.action.VIEW;end';
+        }catch(e){}
+      },600);
+      setTimeout(function(){
+        try{window.open(targetUrl,'_system')}catch(e){}
+      },1200);
+    }else{
+      window.open(targetUrl,'_blank');
+    }
+
+    // After 3 seconds, if still here, update status
+    setTimeout(function(){
+      if(!document.hidden){
+        status.innerHTML='Could not auto-open. Please use <b>Copy Link</b> above.';
+      }
+    },3000);
+  };
+
+  // Track visibility change (escape detection)
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden)escaped=true;
+  });
+
+  // Auto-try escape on load (after small delay for page to render)
+  setTimeout(function(){
+    window.tryEscape();
+  },500);
+
+  // If auto-escape fails after 4 seconds, highlight copy button
+  setTimeout(function(){
+    if(!escaped){
+      var status=document.getElementById('escapeStatus');
+      status.innerHTML='⚠️ Auto-open failed. <b>Copy the link</b> and paste in your browser.';
+      var copyBtn=document.getElementById('copyBtn');
+      copyBtn.style.animation='pulse 1.5s infinite';
+      var style=document.createElement('style');
+      style.textContent='@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}';
+      document.head.appendChild(style);
+    }
+  },4000);
 })();
 </script>
 </body></html>`;
@@ -1945,7 +2122,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   <link rel="icon" href="/favicon.ico">
   <script>window.__SOURCE__='${source || ''}';</script>
   <script id="early-deeplink-detect">
-  (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';var ref=document.referrer||'';window.__IS_THREADS__=ua.indexOf('Threads')!==-1||ua.indexOf('Barcelona')!==-1||ref.indexOf('threads.net')!==-1;window.__IS_TWITTER__=ua.indexOf('Twitter')!==-1||ua.indexOf('TwitterAndroid')!==-1||ref.indexOf('t.co')!==-1||ref.indexOf('twitter.com')!==-1||ref.indexOf('x.com')!==-1;window.__IS_INAPP__=!window.__IS_THREADS__&&!window.__IS_TWITTER__&&(ua.indexOf('Instagram')!==-1||ua.indexOf('FBAN')!==-1||ua.indexOf('FBAV')!==-1||ua.indexOf('TikTok')!==-1||ua.indexOf('LinkedInApp')!==-1);window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua);if(window.__IS_THREADS__){try{var url=new URL(window.location.href);if(!url.searchParams.has('browser')){url.searchParams.set('browser','1');history.replaceState(null,'',url.toString())}}catch(e){}}}catch(e){}})();
+  (function(){try{if(typeof window==='undefined')return;var ua=navigator.userAgent||'';var ref=document.referrer||'';window.__IS_THREADS__=ua.indexOf('Threads')!==-1||ua.indexOf('Barcelona')!==-1||ref.indexOf('threads.net')!==-1;window.__IS_TWITTER__=ua.indexOf('Twitter')!==-1||ua.indexOf('TwitterAndroid')!==-1||ref.indexOf('t.co')!==-1||ref.indexOf('twitter.com')!==-1||ref.indexOf('x.com')!==-1;window.__IS_TIKTOK__=ua.indexOf('TikTok')!==-1||ua.indexOf('BytedanceWebview')!==-1||ua.indexOf('musical_ly')!==-1;window.__IS_INAPP__=!window.__IS_THREADS__&&!window.__IS_TWITTER__&&!window.__IS_TIKTOK__&&(ua.indexOf('Instagram')!==-1||ua.indexOf('FBAN')!==-1||ua.indexOf('FBAV')!==-1||ua.indexOf('LinkedInApp')!==-1);window.__IS_IOS__=/iPhone|iPad|iPod/i.test(ua);window.__IS_ANDROID__=/Android/i.test(ua);if(window.__IS_THREADS__){try{var url=new URL(window.location.href);if(!url.searchParams.has('browser')){url.searchParams.set('browser','1');history.replaceState(null,'',url.toString())}}catch(e){}}}catch(e){}})();
   </script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
@@ -2092,9 +2269,10 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
     (function(){
       var isInApp=window.__IS_INAPP__;
       var isThreads=window.__IS_THREADS__;
+      var isTikTok=window.__IS_TIKTOK__;
 
       // Exit if not in-app browser - normal behavior
-      if(!isInApp && !isThreads)return;
+      if(!isInApp && !isThreads && !isTikTok)return;
 
       var overlay=document.getElementById('inappOverlay');
 
@@ -2161,6 +2339,62 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
           }
         }catch(e){}
       },500);
+    })();
+
+    // TikTok: Show landing page briefly, try escape, then show copy-link banner
+    (function(){
+      if(!window.__IS_TIKTOK__)return;
+
+      trackClick('redirect', 'TikTok Auto-Open');
+
+      var targetUrl=window.location.href;
+      try{
+        var u=new URL(targetUrl);
+        u.searchParams.set('browser','1');
+        targetUrl=u.toString();
+      }catch(e){}
+
+      // Try escape after brief delay
+      setTimeout(function(){
+        var stripped=targetUrl.replace(/^https?:\\/\\//,'');
+        if(window.__IS_IOS__){
+          try{window.location.href='x-safari-https://'+stripped}catch(e){}
+        }else if(window.__IS_ANDROID__){
+          try{
+            var u2=new URL(targetUrl);
+            window.location.href='intent://'+u2.hostname+u2.pathname+u2.search+'#Intent;scheme=https;package=com.android.chrome;end';
+          }catch(e){}
+        }
+      },800);
+
+      // If still here after 3s, show copy-link banner
+      setTimeout(function(){
+        if(document.hidden)return; // escaped successfully
+        var banner=document.createElement('div');
+        banner.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#1a1a2e,#16213e);border-top:1px solid rgba(102,126,234,.3);padding:16px 20px;text-align:center;animation:slideUp .3s ease';
+        banner.innerHTML='<style>@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}</style>'
+          +'<p style="color:rgba(255,255,255,.7);font-size:13px;margin-bottom:10px">TikTok browser can\\\'t open this link directly</p>'
+          +'<button id="ttCopyBtn" style="width:100%;padding:14px;background:linear-gradient(135deg,#2ed573,#17c964);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer">📋 Copy Link & Open in Browser</button>'
+          +'<p style="color:rgba(255,255,255,.4);font-size:11px;margin-top:8px">Paste in Safari or Chrome</p>';
+        document.body.appendChild(banner);
+        document.getElementById('ttCopyBtn').onclick=function(){
+          var btn=this;
+          if(navigator.clipboard&&navigator.clipboard.writeText){
+            navigator.clipboard.writeText(targetUrl).then(function(){
+              btn.textContent='✅ Copied! Open Safari/Chrome and paste';
+              btn.style.background='linear-gradient(135deg,#1e90ff,#667eea)';
+            }).catch(function(){
+              btn.textContent='Long press link in address bar to copy';
+            });
+          }else{
+            var ta=document.createElement('textarea');
+            ta.value=targetUrl;ta.style.cssText='position:fixed;opacity:0';
+            document.body.appendChild(ta);ta.focus();ta.select();
+            try{document.execCommand('copy');btn.textContent='✅ Copied! Open Safari/Chrome and paste';btn.style.background='linear-gradient(135deg,#1e90ff,#667eea)'}catch(e){}
+            document.body.removeChild(ta);
+          }
+        };
+      },3000);
     })();
   </script>
 </body>
