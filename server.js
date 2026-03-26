@@ -2299,28 +2299,71 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
       },true);
     })();
 
-    // Twitter/X: Auto-escape after page loads (shows landing page briefly, then triggers "Open in Safari?")
+    // Twitter/X: Auto-escape after page loads
     (function(){
       if(!window.__IS_TWITTER__)return;
 
-      // Track the Twitter visit before escaping
       trackClick('redirect', 'Twitter Auto-Open');
 
-      // Wait for page to render, then trigger browser escape
+      var targetUrl=window.location.href;
+      try{
+        var u=new URL(targetUrl);
+        u.searchParams.set('browser','1');
+        targetUrl=u.toString();
+      }catch(e){}
+      var stripped=targetUrl.replace(/^https?:\\/\\//,'');
+      var escaped=false;
+
+      document.addEventListener('visibilitychange',function(){
+        if(document.hidden)escaped=true;
+      });
+
+      // Try escape after 1s
       setTimeout(function(){
         try{
-          var url=new URL(window.location.href);
-          url.searchParams.set('browser','1');
-          var full=url.toString();
-          var stripped=full.replace(/^https?:\\/\\//,'');
-
           if(window.__IS_IOS__){
-            window.location.href='x-safari-https://'+stripped;
+            var ua=navigator.userAgent||'';
+            var m=ua.match(/OS (\\d+)_/);
+            var v=m?parseInt(m[1],10):0;
+            if(v>=17){
+              location.href='x-safari-https://'+stripped;
+            }else{
+              location.href='com-apple-mobilesafari-tab:'+targetUrl;
+            }
+            setTimeout(function(){if(!escaped)try{location.href='googlechrome://'+stripped}catch(e){}},700);
           }else if(window.__IS_ANDROID__){
-            window.location.href='intent://'+url.hostname+url.pathname+url.search+'#Intent;scheme=https;package=com.android.chrome;end';
+            location.href='intent://'+stripped+'#Intent;scheme=https;S.browser_fallback_url='+encodeURIComponent(targetUrl)+';end;';
           }
         }catch(e){}
-      },500);
+      },1000);
+
+      // Fallback banner after 3s if escape didn't work
+      setTimeout(function(){
+        if(escaped||document.hidden)return;
+        var banner=document.createElement('div');
+        banner.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:99999;background:rgba(0,0,0,.95);border-top:1px solid rgba(29,161,242,.3);padding:16px 20px;text-align:center;animation:twSlide .3s ease;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)';
+        banner.innerHTML='<style>@keyframes twSlide{from{transform:translateY(100%)}to{transform:translateY(0)}}</style>'
+          +'<p style="color:#fff;font-size:14px;font-weight:700;margin-bottom:6px">Open in your browser</p>'
+          +'<p style="color:rgba(255,255,255,.6);font-size:12px;margin-bottom:12px">Tap the menu icon ··· → <b style="color:#fff">Open in browser</b></p>'
+          +'<div style="display:flex;gap:8px">'
+          +'<button id="twCopyBtn" style="flex:1;padding:12px;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">📋 Copy Link</button>'
+          +'<button id="twOpenBtn" style="flex:1;padding:12px;background:linear-gradient(135deg,#1DA1F2,#0d8fd9);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">🌐 Try Open</button>'
+          +'</div>';
+        document.body.appendChild(banner);
+        document.body.style.paddingBottom='140px';
+
+        document.getElementById('twCopyBtn').onclick=function(){
+          var btn=this;
+          function onCopied(){btn.textContent='✅ Copied!';btn.style.background='rgba(46,213,115,.2)';btn.style.borderColor='#2ed573';setTimeout(function(){btn.textContent='📋 Copy Link';btn.style.background='';btn.style.borderColor=''},4000)}
+          if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(targetUrl).then(onCopied).catch(function(){var ta=document.createElement('textarea');ta.value=targetUrl;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.focus();ta.select();try{document.execCommand('copy');onCopied()}catch(e){}document.body.removeChild(ta)})}
+          else{var ta=document.createElement('textarea');ta.value=targetUrl;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.focus();ta.select();try{document.execCommand('copy');onCopied()}catch(e){}document.body.removeChild(ta)}
+        };
+
+        document.getElementById('twOpenBtn').onclick=function(){
+          if(window.__IS_IOS__){try{location.href='x-safari-https://'+stripped}catch(e){}setTimeout(function(){try{location.href='googlechrome://'+stripped}catch(e){}},500)}
+          else if(window.__IS_ANDROID__){try{location.href='intent://'+stripped+'#Intent;scheme=https;S.browser_fallback_url='+encodeURIComponent(targetUrl)+';end;'}catch(e){}}
+        };
+      },3000);
     })();
 
     // TikTok: Show landing page, try escape in background, show instructions banner
