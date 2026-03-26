@@ -2040,9 +2040,9 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
     const isOnlyFans = (f.url || '').toLowerCase().includes('onlyfans')
       || (f.title || '').toLowerCase().includes('exclusive content')
       || (f.title || '').toLowerCase().includes('more of me');
-    const featIconBg = isOnlyFans ? '#003CFF' : (f.color || '#667eea');
+    const featIconBg = isOnlyFans ? 'none' : (f.color || '#667eea');
     const featIconSvg = isOnlyFans
-      ? SVG.onlyfans.replace('<svg ', '<svg style="width:26px;height:26px" ')
+      ? `<svg viewBox="0 0 40 40" style="width:40px;height:40px"><circle cx="20" cy="20" r="20" fill="#003CFF"/><circle cx="20" cy="20" r="14" fill="none" stroke="white" stroke-width="3.5"/><circle cx="20" cy="20" r="5" fill="white"/></svg>`
       : `<svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#fff"><circle cx="12" cy="12" r="10"/></svg>`;
     const cardContent = `<div class="feat-card-display" style="${imgBg}"><div class="feat-overlay"><div class="feat-icon" style="background:${featIconBg}">${featIconSvg}</div><span class="feat-title">${esc(safeTitle)}</span></div></div>`;
     if (redirectUrl) {
