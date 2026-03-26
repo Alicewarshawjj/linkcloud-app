@@ -2040,7 +2040,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
     const isOnlyFans = (f.url || '').toLowerCase().includes('onlyfans')
       || (f.title || '').toLowerCase().includes('exclusive content')
       || (f.title || '').toLowerCase().includes('more of me');
-    const featIconBg = isOnlyFans ? 'transparent' : (f.color || '#667eea');
+    const featIconBg = isOnlyFans ? '#003CFF' : (f.color || '#667eea');
     const featIconSvg = isOnlyFans
       ? SVG.onlyfans.replace('<svg ', '<svg style="width:26px;height:26px" ')
       : `<svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#fff"><circle cx="12" cy="12" r="10"/></svg>`;
