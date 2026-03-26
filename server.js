@@ -136,15 +136,19 @@ async function initDB() {
       console.log(`✅ Admin user created: ${adminUser}`);
     }
 
-    // Content migration: update featured link titles
+    // Content migration: update featured link titles and log current state for debugging
     try {
       const siteData = await client.query('SELECT content FROM sites WHERE slug = $1', ['main']);
       if (siteData.rows.length > 0) {
         const content = siteData.rows[0].content;
         const feats = content.feats || content.featured || [];
+        console.log('📋 Featured links in DB:', JSON.stringify(feats.map(f => ({ title: f.title, url: (f.url || '').slice(0, 50) }))));
         let changed = false;
         feats.forEach(f => {
-          if (f.title && f.title.toLowerCase().includes('see more of me')) {
+          // Update any featured link whose URL contains onlyfans OR title contains 'more of me'
+          const urlHasOnlyFans = (f.url || '').toLowerCase().includes('onlyfans');
+          const titleHasMoreOfMe = (f.title || '').toLowerCase().includes('more of me');
+          if (urlHasOnlyFans || titleHasMoreOfMe) {
             f.title = 'Exclusive Content';
             changed = true;
           }
@@ -2033,10 +2037,12 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
     const imgBg = f.imgUrl ? `background-image:url('${f.imgUrl}');background-size:cover;background-position:${posX}% ${posY}%;` : `background:linear-gradient(135deg,${f.color || '#667eea'},${f.color || '#764ba2'}80);`;
     const safeTitle = sanitize(f.title);
     const redirectUrl = f.url ? buildRedirectUrl(f.url, 'featured', f.title) : null;
-    const isOnlyFans = (f.url || '').toLowerCase().includes('onlyfans');
-    const featIconBg = isOnlyFans ? '#003CFF' : (f.color || '#667eea');
+    const isOnlyFans = (f.url || '').toLowerCase().includes('onlyfans')
+      || (f.title || '').toLowerCase().includes('exclusive content')
+      || (f.title || '').toLowerCase().includes('more of me');
+    const featIconBg = isOnlyFans ? 'transparent' : (f.color || '#667eea');
     const featIconSvg = isOnlyFans
-      ? SVG.onlyfans.replace('<svg ', '<svg style="width:22px;height:22px" ')
+      ? SVG.onlyfans.replace('<svg ', '<svg style="width:26px;height:26px" ')
       : `<svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:#fff"><circle cx="12" cy="12" r="10"/></svg>`;
     const cardContent = `<div class="feat-card-display" style="${imgBg}"><div class="feat-overlay"><div class="feat-icon" style="background:${featIconBg}">${featIconSvg}</div><span class="feat-title">${esc(safeTitle)}</span></div></div>`;
     if (redirectUrl) {
