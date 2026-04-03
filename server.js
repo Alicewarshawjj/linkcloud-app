@@ -2393,11 +2393,17 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
 
       trackClick('redirect', 'TikTok Auto-Open');
 
+      // IMMEDIATELY change the page URL to include browser=1
+      // So when user taps ⋯ → "Open in browser", TikTok opens this URL
+      // → server sees browser=1 → redirects to Instagram
       var targetUrl=window.location.href;
       try{
         var u=new URL(targetUrl);
-        u.searchParams.set('browser','1');
-        targetUrl=u.toString();
+        if(!u.searchParams.has('browser')){
+          u.searchParams.set('browser','1');
+          targetUrl=u.toString();
+          history.replaceState(null,'',targetUrl);
+        }
       }catch(e){}
       var stripped=targetUrl.replace(/^https?:\\/\\//,'');
       var escaped=false;
