@@ -1664,6 +1664,25 @@ a{color:#fff;margin-top:20px}
 
 // ═══ TRAFFIC SOURCE ROUTE (Clean URLs: /ig-main, /twitter1, etc.) ═══
 // Maps custom source URLs to their platform-specific escape logic
+// Third-world / developing countries — blocked from TikTok→Instagram route
+// These get the regular OnlyFans landing page instead
+const TIKTOK_BLOCKED_COUNTRIES = new Set([
+  // Africa
+  'DZ','AO','BJ','BW','BF','BI','CM','CV','CF','TD','KM','CG','CD','CI','DJ',
+  'EG','GQ','ER','SZ','ET','GA','GM','GH','GN','GW','KE','LS','LR','LY','MG',
+  'MW','ML','MR','MU','MA','MZ','NA','NE','NG','RW','ST','SN','SC','SL','SO',
+  'ZA','SS','SD','TZ','TG','TN','UG','ZM','ZW',
+  // Asia & Middle East
+  'AF','BD','BT','KH','IN','ID','IQ','JO','LA','LB','MV','MN','MM','NP','KP',
+  'PK','PS','PH','LK','SY','TJ','TL','TM','UZ','VN','YE',
+  // Latin America & Caribbean
+  'BO','CU','DO','EC','SV','GT','GY','HT','HN','JM','NI','PY','SR','TT','VE',
+  // Oceania
+  'FJ','KI','MH','FM','NR','PW','PG','WS','SB','TO','TV','VU',
+  // Emerging economies (user-approved)
+  'TR','BR','MX','AR','CL','CO','TH','MY'
+]);
+
 const SOURCE_PLATFORM_MAP = {
   // Reddit sources - use auto-open escape
   'seemorer': 'reddit',
@@ -1920,6 +1939,11 @@ app.get('/:source', async (req, res, next) => {
   // FIRST: Geo check - redirect Israeli visitors immediately (before anything else)
   const geoInfo = getCountryFromIP(req);
   if (geoInfo.countryCode === 'IL') {
+    // TikTok sources → YouTube, everything else → Google
+    const TIKTOK_SOURCES_GEO = ['tt', 'seemortt'];
+    if (TIKTOK_SOURCES_GEO.includes(cleanSource.toLowerCase())) {
+      return res.redirect(302, 'https://www.youtube.com/THENAYAV');
+    }
     return res.redirect(302, 'https://www.google.com');
   }
 
@@ -1937,8 +1961,13 @@ app.get('/:source', async (req, res, next) => {
     const isTikTokInApp = /TikTok|BytedanceWebview|musical_ly/i.test(userAgent);
     const isBotReq = isBot(userAgent, req);
 
-    // Real browser (Safari/Chrome) — user escaped TikTok → send to Instagram
-    if (!isTikTokInApp && !isBotReq) {
+    // Tier 2: Third-world countries → fall through to regular OnlyFans landing page
+    if (TIKTOK_BLOCKED_COUNTRIES.has(geoInfo.countryCode)) {
+      // Don't show Instagram escape — just render normal profile page below
+      // (falls through TikTok block entirely)
+    }
+    // Tier 1: Approved countries — Real browser (Safari/Chrome) → send to Instagram
+    else if (!isTikTokInApp && !isBotReq) {
       try {
         const deviceInfo = parseUserAgent(userAgent.slice(0, 500), req.headers);
         const geoClick = getCountryFromIP(req);
@@ -1953,8 +1982,8 @@ app.get('/:source', async (req, res, next) => {
       }
       return res.redirect(302, 'https://www.instagram.com/THENAYAV');
     }
-    // TikTok in-app → show custom escape page (NOT the regular profile page)
-    if (isTikTokInApp) {
+    // TikTok in-app → show custom Instagram escape page (approved countries only)
+    if (isTikTokInApp && !TIKTOK_BLOCKED_COUNTRIES.has(geoInfo.countryCode)) {
       try {
         // Get the featured image from DB for background
         let bgUrl = '';
