@@ -1848,6 +1848,59 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Ar
 </body></html>`;
 }
 
+// TikTok escape page — directs users to open in browser to reach Instagram
+// Full-screen background image, clean design, arrow pointing to ⋯ menu
+function generateTikTokInstaPage(bgImageUrl) {
+  const bgStyle = bgImageUrl
+    ? `background-image:url('${bgImageUrl}');background-size:cover;background-position:center`
+    : 'background:linear-gradient(135deg,#833AB4,#FD1D1D 50%,#F77737)';
+  return `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Follow me on Instagram</title>
+<meta name="description" content="Follow me for exclusive content">
+<meta name="robots" content="noindex,nofollow">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;min-height:100vh;overflow:hidden}
+.bg{position:fixed;top:0;left:0;right:0;bottom:0;${bgStyle}}
+.overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(to bottom,rgba(0,0,0,.3) 0%,rgba(0,0,0,.15) 30%,rgba(0,0,0,.6) 70%,rgba(0,0,0,.85) 100%)}
+.arrow{position:fixed;top:36px;right:14px;z-index:100;display:flex;flex-direction:column;align-items:center;animation:float 2s ease-in-out infinite}
+.arrow-icon{font-size:32px;line-height:1;filter:drop-shadow(0 2px 8px rgba(0,0,0,.5))}
+.arrow-label{margin-top:6px;background:rgba(255,255,255,.95);color:#000;padding:7px 12px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.arrow-label::after{content:'';position:absolute;top:-6px;right:16px;border:6px solid transparent;border-bottom-color:rgba(255,255,255,.95)}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.content{position:fixed;bottom:0;left:0;right:0;z-index:100;padding:0 24px 60px;text-align:center}
+.ig-icon{width:64px;height:64px;border-radius:18px;background:linear-gradient(45deg,#F77737,#FD1D1D 50%,#833AB4);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;box-shadow:0 4px 20px rgba(131,58,180,.4)}
+.ig-icon svg{width:36px;height:36px}
+h1{color:#fff;font-size:24px;font-weight:700;margin-bottom:8px;text-shadow:0 2px 10px rgba(0,0,0,.5)}
+p{color:rgba(255,255,255,.85);font-size:15px;line-height:1.5;text-shadow:0 1px 6px rgba(0,0,0,.5)}
+.handle{color:#fff;font-weight:700;font-size:17px;margin-top:12px;display:inline-block;padding:8px 20px;background:rgba(255,255,255,.15);border-radius:20px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.2)}
+.steps{margin-top:20px;color:rgba(255,255,255,.7);font-size:13px}
+.steps b{color:#fff}
+</style>
+</head><body>
+<div class="bg"></div>
+<div class="overlay"></div>
+
+<div class="arrow">
+  <div class="arrow-icon">☝️</div>
+  <div class="arrow-label">Tap ⋯ here</div>
+</div>
+
+<div class="content">
+  <div class="ig-icon">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.756 0 8.331.012 7.052.07 3.656.262.262 3.656.07 7.052.012 8.331 0 8.756 0 12s.012 3.669.07 4.948c.192 3.396 3.586 6.79 6.982 6.982C8.331 23.988 8.756 24 12 24s3.669-.012 4.948-.07c3.397-.192 6.79-3.586 6.982-6.982.058-1.279.07-1.704.07-4.948s-.012-3.669-.07-4.948c-.192-3.397-3.586-6.79-6.982-6.982C15.669.012 15.244 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zm0 10.162a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 11-2.88 0 1.44 1.44 0 012.88 0z" fill="white"/></svg>
+  </div>
+  <h1>Follow me on Instagram ✨</h1>
+  <p>Tap the menu above to open in your browser</p>
+  <div class="handle">@THENAYAV</div>
+  <p class="steps">Tap <b>⋯</b> → <b>Open in browser</b></p>
+</div>
+</body></html>`;
+}
+
 app.get('/:source', async (req, res, next) => {
   // Skip if it's a known route
   const knownRoutes = ['admin', 'go', 'api', 'favicon.ico', 'robots.txt', 'debug', 'health', 'xtest', 'igescape', 'igopen', 'escapelab', 'dlredirect', 'metaredirect', 'formredirect'];
@@ -1900,7 +1953,24 @@ app.get('/:source', async (req, res, next) => {
       }
       return res.redirect(302, 'https://www.instagram.com/THENAYAV');
     }
-    // TikTok in-app or bot → fall through to render landing page below
+    // TikTok in-app → show custom escape page (NOT the regular profile page)
+    if (isTikTokInApp) {
+      try {
+        // Get the featured image from DB for background
+        let bgUrl = '';
+        if (dbReady) {
+          const r = await pool.query('SELECT content FROM sites WHERE slug = $1', ['main']);
+          if (r.rows.length > 0) {
+            const feats = r.rows[0].content.feats || r.rows[0].content.featured || [];
+            if (feats[0] && feats[0].imgUrl) bgUrl = feats[0].imgUrl;
+          }
+        }
+        return res.send(generateTikTokInstaPage(bgUrl));
+      } catch (e) {
+        console.error('TikTok page error:', e);
+      }
+    }
+    // Bot → fall through to render sanitized landing page below
   }
 
   // If browser=1 param present, redirect to destination (no extra screen)
