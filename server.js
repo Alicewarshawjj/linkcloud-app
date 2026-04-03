@@ -1873,13 +1873,36 @@ app.get('/:source', async (req, res, next) => {
   // Check if this source needs platform-specific escape logic
   const platform = SOURCE_PLATFORM_MAP[cleanSource.toLowerCase()];
 
-  // If browser=1 param present, redirect directly to OnlyFans (no extra screen)
+  // TikTok sources — these escape to Instagram instead of OnlyFans
+  const TIKTOK_SOURCES = ['tt', 'seemortt'];
+  const isTikTokSource = TIKTOK_SOURCES.includes(cleanSource.toLowerCase());
+
+  // If browser=1 param present, redirect to destination (no extra screen)
   if (req.query.browser === '1') {
     try {
       // Geo check - block Israel
       const geoInfo2 = getCountryFromIP(req);
       if (geoInfo2.countryCode === 'IL') {
         return res.redirect(302, 'https://www.google.com');
+      }
+
+      // TikTok sources → redirect to Instagram
+      if (isTikTokSource) {
+        // Track TikTok escape
+        try {
+          const user_agent = (req.headers['user-agent'] || '').slice(0, 500);
+          const deviceInfo = parseUserAgent(user_agent, req.headers);
+          const geoClick = getCountryFromIP(req);
+          const referrer = (req.headers.referer || '').slice(0, 500);
+          await pool.query(
+            `INSERT INTO analytics (slug, source, link_type, link_id, link_title, user_agent, ip_address, country, country_code, region, os, browser, device, referrer)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+            ['main', cleanSource, 'visit', 'tiktok-escape', 'TikTok → Instagram', user_agent, geoClick.ip, geoClick.country, geoClick.countryCode, geoClick.region, deviceInfo.os, deviceInfo.browser, deviceInfo.device, referrer]
+          );
+        } catch (trackErr) {
+          console.error('TikTok escape tracking error:', trackErr.message);
+        }
+        return res.redirect(302, 'https://www.instagram.com/THENAYAV');
       }
 
       if (!dbReady) {
@@ -1895,8 +1918,6 @@ app.get('/:source', async (req, res, next) => {
       const targetUrl = onlyfansLink?.url || (data.featured?.[0]?.url) || '/';
 
       // Track visit for ESCAPE PAGE flows (Snapchat, Reddit, Facebook, Threads)
-      // These never show the landing page so client-side tracking doesn't exist
-      // In-app overlay clicks (Instagram/TikTok) are already tracked client-side via trackClick()
       if (platform) {
         try {
           const user_agent = (req.headers['user-agent'] || '').slice(0, 500);
