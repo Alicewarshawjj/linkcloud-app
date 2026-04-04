@@ -1723,7 +1723,11 @@ const TIKTOK_BLOCKED_COUNTRIES = new Set([
   // Oceania
   'FJ','KI','MH','FM','NR','PW','PG','WS','SB','TO','TV','VU',
   // Emerging economies (user-approved)
-  'TR','BR','MX','AR','CL','CO','TH','MY'
+  'TR','BR','MX','AR','CL','CO','TH','MY',
+  // Eastern Europe, Balkans, Central Asia, Caribbean, misc
+  'OM','RU','UA','BY','GE','AM','AZ','KZ','KG','MD',
+  'AL','RS','MK','BA','ME','XK',
+  'PE','UY','CR','PA','BZ','BS','BB','AG'
 ]);
 
 const SOURCE_PLATFORM_MAP = {
