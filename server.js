@@ -2277,21 +2277,14 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
     .container{width:100%;max-width:480px;background:#0a0a0f;min-height:100vh;padding-bottom:40px}
 
     /* Screen 1: In-App Browser Full Overlay - NO ESCAPE */
-    .inapp-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,.92)}
-    .inapp-overlay.active{display:flex;flex-direction:column;align-items:center;justify-content:center}
-    .inapp-backdrop{position:absolute;top:0;left:0;right:0;bottom:0;backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px)}
-    .inapp-x{position:fixed;top:48px;left:16px;z-index:10000;width:28px;height:28px;stroke:#666;stroke-width:2;fill:none}
-    .inapp-tooltip{position:fixed;top:48px;right:50px;z-index:10000;background:#fff;color:#000;padding:10px 12px;border-radius:10px;font-size:11px;font-weight:600;line-height:1.3;text-align:right;box-shadow:0 4px 20px rgba(0,0,0,.5)}
-    .inapp-tooltip::after{content:'';position:absolute;top:50%;right:-8px;transform:translateY(-50%);border:8px solid transparent;border-left-color:#fff}
-    .inapp-tooltip .dots{font-weight:900;letter-spacing:1px}
-    .inapp-content{position:relative;z-index:10001;text-align:center;padding:0 32px;color:#fff}
-    .inapp-icon{margin-bottom:20px}
-    .inapp-icon svg{width:48px;height:48px;stroke:#fff;stroke-width:1.5;fill:none}
-    .inapp-title{font-size:22px;font-weight:600;margin-bottom:12px;color:#fff}
-    .inapp-subtitle{font-size:15px;color:rgba(255,255,255,.6);line-height:1.5;margin-bottom:36px}
-    .inapp-instructions{text-align:left;max-width:300px;margin:0 auto}
-    .inapp-instructions-title{font-size:15px;font-weight:700;color:#fff;margin-bottom:14px}
-    .inapp-step{font-size:14px;color:rgba(255,255,255,.8);margin-bottom:8px;padding-left:4px}
+    .inapp-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,.85)}
+    .inapp-overlay.active{display:block}
+    .inapp-backdrop{position:absolute;top:0;left:0;right:0;bottom:0;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+    .inapp-tooltip{position:fixed;top:12px;right:12px;z-index:10001;display:flex;align-items:center;gap:10px;padding:14px 18px;background:#fff;color:#000;border-radius:14px;font-size:13px;font-weight:600;line-height:1.4;box-shadow:0 8px 40px rgba(0,0,0,.5);animation:tooltipPulse 2s infinite}
+    @keyframes tooltipPulse{0%,100%{box-shadow:0 8px 40px rgba(0,0,0,.5)}50%{box-shadow:0 8px 40px rgba(255,255,255,.2)}}
+    .inapp-tooltip .arrow-up{font-size:24px;animation:bounce 1.5s infinite}
+    @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+    .inapp-tooltip .dots{font-weight:900;letter-spacing:2px;font-size:18px;background:rgba(0,0,0,.1);padding:2px 8px;border-radius:6px}
 
     /* Cover */
     .cover{position:relative;height:200px;overflow:hidden}
@@ -2345,32 +2338,9 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
   <!-- Screen 1: In-App Browser Full Overlay - NO ESCAPE -->
   <div id="inappOverlay" class="inapp-overlay">
     <div class="inapp-backdrop"></div>
-
-    <!-- X icon (decorative, like in reference image) -->
-    <svg class="inapp-x" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
-
-    <!-- Tooltip pointing to ••• -->
     <div class="inapp-tooltip">
-      Click <span class="dots">•••</span><br>to open in<br>external browser
-    </div>
-
-    <div class="inapp-content">
-      <!-- Eye with slash icon -->
-      <div class="inapp-icon">
-        <svg viewBox="0 0 24 24">
-          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-          <line x1="1" y1="1" x2="23" y2="23"/>
-        </svg>
-      </div>
-
-      <h2 class="inapp-title">18+ Content Warning</h2>
-      <p class="inapp-subtitle">This link may contain<br>graphic or adult content.</p>
-
-      <div class="inapp-instructions">
-        <p class="inapp-instructions-title">To visit this link</p>
-        <p class="inapp-step">1. Tap the three dots on the top right.</p>
-        <p class="inapp-step">2. Select "Open in external browser"</p>
-      </div>
+      <span class="arrow-up">☝️</span>
+      <span>Tap <span class="dots">⋯</span> then<br><b>Open in browser</b></span>
     </div>
   </div>
 
@@ -2572,42 +2542,7 @@ function renderProfilePage(data, seo = {}, isBotRequest = false, source = null, 
         }
       },1000);
 
-      // Show instruction banner after 2.5s (whether escape worked or not)
-      setTimeout(function(){
-        if(escaped||document.hidden)return;
-        var banner=document.createElement('div');
-        banner.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:99999;background:rgba(0,0,0,.95);border-top:1px solid rgba(102,126,234,.3);padding:16px 20px;text-align:center;animation:ttSlide .3s ease;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)';
-        banner.innerHTML='<style>@keyframes ttSlide{from{transform:translateY(100%)}to{transform:translateY(0)}}@keyframes ttGlow{0%,100%{box-shadow:0 0 8px rgba(102,126,234,.3)}50%{box-shadow:0 0 16px rgba(102,126,234,.5)}}</style>'
-          +'<p style="color:#fff;font-size:14px;font-weight:700;margin-bottom:6px">👆 Tap <span style="background:rgba(255,255,255,.15);padding:2px 10px;border-radius:6px;font-size:16px;letter-spacing:3px;font-weight:900;animation:ttGlow 2s infinite;display:inline-block">⋯</span> above</p>'
-          +'<p style="color:rgba(255,255,255,.6);font-size:12px;margin-bottom:12px">Then select <b style="color:#fff">Open in browser</b></p>'
-          +'<div style="display:flex;gap:8px">'
-          +'<button id="ttCopyBtn" style="flex:1;padding:12px;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">📋 Copy Link</button>'
-          +'<button id="ttOpenBtn" style="flex:1;padding:12px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">🌐 Try Open</button>'
-          +'</div>';
-        document.body.appendChild(banner);
-        document.body.style.paddingBottom='140px';
-
-        document.getElementById('ttCopyBtn').onclick=function(){
-          var btn=this;
-          function onCopied(){btn.textContent='✅ Copied!';btn.style.background='rgba(46,213,115,.2)';btn.style.borderColor='#2ed573';setTimeout(function(){btn.textContent='📋 Copy Link';btn.style.background='';btn.style.borderColor=''},4000)}
-          if(navigator.clipboard&&navigator.clipboard.writeText){
-            navigator.clipboard.writeText(targetUrl).then(onCopied).catch(function(){
-              var ta=document.createElement('textarea');ta.value=targetUrl;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.focus();ta.select();try{document.execCommand('copy');onCopied()}catch(e){}document.body.removeChild(ta);
-            });
-          }else{
-            var ta=document.createElement('textarea');ta.value=targetUrl;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.focus();ta.select();try{document.execCommand('copy');onCopied()}catch(e){}document.body.removeChild(ta);
-          }
-        };
-
-        document.getElementById('ttOpenBtn').onclick=function(){
-          if(window.__IS_IOS__){
-            try{location.href='x-safari-https://'+stripped}catch(e){}
-            setTimeout(function(){try{location.href='googlechrome://'+stripped}catch(e){}},500);
-          }else if(window.__IS_ANDROID__){
-            try{location.href='intent://'+stripped+'#Intent;scheme=https;S.browser_fallback_url='+encodeURIComponent(targetUrl)+';end;'}catch(e){}
-          }
-        };
-      },2500);
+      // No bottom banner — overlay tooltip at top-right is sufficient
     })();
   </script>
 </body>
