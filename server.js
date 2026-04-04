@@ -395,38 +395,81 @@ function isPublicIP(ip) {
   return true;
 }
 
-// Get country from IP using GeoIP
+// In-memory geo cache (IP → {countryCode, country, ts})
+const geoCache = new Map();
+const GEO_CACHE_TTL = 1000 * 60 * 60; // 1 hour
+
+// Get country from IP - tries local geoip-lite first, then external API
 function getCountryFromIP(req) {
   const ip = getClientIP(req);
 
-  // Debug logging
-  console.log('🌍 GEO:', {
-    'req.ip': req.ip,
-    'xff': req.headers['x-forwarded-for'],
-    'finalIP': ip,
-    'isPublic': isPublicIP(ip)
-  });
-
   if (!isPublicIP(ip)) {
-    return { country: 'Unknown', countryCode: 'XX', ip };
+    return { country: 'Unknown', countryCode: 'XX', ip, _needsAsync: false };
   }
 
+  // Check cache
+  const cached = geoCache.get(ip);
+  if (cached && (Date.now() - cached.ts) < GEO_CACHE_TTL) {
+    return { ...cached, ip, _needsAsync: false };
+  }
+
+  // Try geoip-lite (local, fast)
   try {
     const geo = geoip.lookup(ip);
     if (geo && geo.country) {
-      return {
+      const result = {
         country: geo.country,
         countryCode: geo.country,
         region: geo.region || null,
         city: geo.city || null,
-        ip
+        ip,
+        _needsAsync: false
       };
+      geoCache.set(ip, { ...result, ts: Date.now() });
+      return result;
     }
   } catch (e) {
-    console.log('🌍 GEO error:', e.message);
+    console.log('🌍 GEO local error:', e.message);
   }
 
-  return { country: 'Unknown', countryCode: 'XX', region: null, city: null, ip };
+  // geoip-lite couldn't resolve — return unknown, flag for async lookup
+  return { country: 'Unknown', countryCode: 'XX', ip, _needsAsync: true };
+}
+
+// Async geo lookup using free external API (called when geoip-lite fails)
+async function getCountryFromIPAsync(req) {
+  const sync = getCountryFromIP(req);
+  if (sync.countryCode !== 'XX') return sync;
+
+  const ip = sync.ip;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if (response.ok) {
+      const data = await response.json();
+      if (data.status === 'success' && data.countryCode) {
+        const result = {
+          country: data.country,
+          countryCode: data.countryCode,
+          region: null,
+          city: null,
+          ip,
+          _needsAsync: false
+        };
+        geoCache.set(ip, { ...result, ts: Date.now() });
+        console.log('🌍 GEO API resolved:', ip, '→', data.countryCode);
+        return result;
+      }
+    }
+  } catch (e) {
+    console.log('🌍 GEO API fallback error:', e.message);
+  }
+
+  return { country: 'Unknown', countryCode: 'XX', ip, _needsAsync: false };
 }
 
 // ═══ LINK ENCRYPTION (AES-256-GCM) ═══
@@ -1526,8 +1569,8 @@ app.get('/admin', (req, res) => {
 // ═══ PROFILE PAGE (Dynamic with Pentagon-Level Protection) ═══
 app.get('/', async (req, res) => {
   try {
-    // FIRST: Geo check - redirect Israeli visitors immediately
-    const geoInfo = getCountryFromIP(req);
+    // FIRST: Geo check - use async API fallback for reliable detection
+    const geoInfo = await getCountryFromIPAsync(req);
     if (geoInfo.countryCode === 'IL') {
       return res.redirect(302, 'https://www.google.com');
     }
@@ -1936,8 +1979,8 @@ app.get('/:source', async (req, res, next) => {
     return next(); // Invalid source, pass to 404
   }
 
-  // FIRST: Geo check - redirect Israeli visitors immediately (before anything else)
-  const geoInfo = getCountryFromIP(req);
+  // FIRST: Geo check - use async API fallback if local DB can't resolve
+  const geoInfo = await getCountryFromIPAsync(req);
   if (geoInfo.countryCode === 'IL') {
     // TikTok sources → YouTube, everything else → Google
     const TIKTOK_SOURCES_GEO = ['tt', 'seemortt'];
@@ -2058,9 +2101,9 @@ app.get('/:source', async (req, res, next) => {
     const userAgent = req.headers['user-agent'] || '';
     const isBotRequest = isBot(userAgent, req);
 
-    // Geo check - block exclusive content for Israel
-    const geoInfo = getCountryFromIP(req);
-    const isGeoBlocked = geoInfo.countryCode === 'IL';
+    // Geo check - hide featured/exclusive content for Israel + third-world countries
+    // Only first-world/approved countries see the full landing page
+    const isGeoBlocked = geoInfo.countryCode === 'IL' || TIKTOK_BLOCKED_COUNTRIES.has(geoInfo.countryCode);
 
     res.send(renderProfilePage(data, seo, isBotRequest, cleanSource, isGeoBlocked));
   } catch (e) {
