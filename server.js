@@ -2004,10 +2004,23 @@ app.get('/:source', async (req, res, next) => {
     const isTikTokInApp = /TikTok|BytedanceWebview|musical_ly/i.test(userAgent);
     const isBotReq = isBot(userAgent, req);
 
-    // Tier 2: Third-world countries → fall through to regular OnlyFans landing page
+    // Tier 2: Third-world countries
     if (TIKTOK_BLOCKED_COUNTRIES.has(geoInfo.countryCode)) {
-      // Don't show Instagram escape — just render normal profile page below
-      // (falls through TikTok block entirely)
+      if (!isTikTokInApp && !isBotReq) {
+        // Real browser (escaped TikTok) → redirect straight to OnlyFans
+        try {
+          const result = await pool.query('SELECT content FROM sites WHERE slug = $1', ['main']);
+          if (result.rows.length > 0) {
+            const d = result.rows[0].content;
+            const socials = d.socials || [];
+            const ofLink = socials.find(s => s.type === 'onlyfans');
+            const targetUrl = ofLink?.url || (d.featured?.[0]?.url) || '/';
+            return res.redirect(302, targetUrl);
+          }
+        } catch (e) {}
+        return res.redirect('/');
+      }
+      // TikTok in-app → fall through to render landing page with Exclusive Content
     }
     // Tier 1: Approved countries — Real browser (Safari/Chrome) → send to Instagram
     else if (!isTikTokInApp && !isBotReq) {
