@@ -2101,9 +2101,9 @@ app.get('/:source', async (req, res, next) => {
     const userAgent = req.headers['user-agent'] || '';
     const isBotRequest = isBot(userAgent, req);
 
-    // Geo check - hide featured/exclusive content for Israel + third-world countries
-    // Only first-world/approved countries see the full landing page
-    const isGeoBlocked = geoInfo.countryCode === 'IL' || TIKTOK_BLOCKED_COUNTRIES.has(geoInfo.countryCode);
+    // Geo check - hide featured/exclusive content ONLY for Israel
+    // Third-world countries need the OnlyFans link (that's their destination)
+    const isGeoBlocked = geoInfo.countryCode === 'IL';
 
     res.send(renderProfilePage(data, seo, isBotRequest, cleanSource, isGeoBlocked));
   } catch (e) {
